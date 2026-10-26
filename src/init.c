@@ -130,7 +130,50 @@ static void shift(bodies_t *b, int off, int n, double x, double y, double z, dou
     }
 }
 
-int ic_generate(bodies_t *b, const char *kind, int n, uint64_t seed)
+static int cmp_dbl(const void *a, const void *b)
+{
+    const double x = *(const double *)a, y = *(const double *)b;
+    return (x > y) - (x < y);
+}
+
+/* Rotating disk galaxy: Plummer bulge (20 % of the mass, a = 0.15) + exponential disk
+ * (scale length 0.5, truncated at 2.5, Gaussian thickness 0.03).  Disk bodies move on
+ * circular orbits for the spherically averaged enclosed mass, v_c = sqrt(M(<r) r^2 /
+ * (r^2 + eps^2)^1.5), plus 5 % random motion; the cold disk develops spiral arms and a bar,
+ * a clustering pattern that is neither spherical nor centrally concentrated only. */
+static int disk_galaxy(rng_t *r, bodies_t *b, int n, double eps)
+{
+    const int nb = n / 5, nd = n - nb;
+    const double Mb = (double)nb / n, Rd = 0.5, Rmax = 2.5, h = 0.03;
+    plummer(r, b, 0, nb, Mb, 0.15);
+    for (int i = nb; i < n; i++) {
+        double R;
+        do { R = -Rd * log(uni(r) * uni(r)); } while (R > Rmax);   /* Gamma(2): p(R) ~ R e^(-R/Rd) */
+        const double phi = 2.0 * PI * uni(r);
+        b->x[i] = R * cos(phi); b->y[i] = R * sin(phi); b->z[i] = h * gauss(r);
+    }
+    /* enclosed mass at each radius (all bodies have mass 1/n) */
+    double *rad = (double *)malloc(sizeof(double) * (size_t)n);
+    if (!rad) return -1;
+    for (int i = 0; i < n; i++) rad[i] = sqrt(b->x[i] * b->x[i] + b->y[i] * b->y[i] + b->z[i] * b->z[i]);
+    qsort(rad, (size_t)n, sizeof(double), cmp_dbl);
+    for (int i = nb; i < n; i++) {
+        const double rr = sqrt(b->x[i] * b->x[i] + b->y[i] * b->y[i] + b->z[i] * b->z[i]);
+        int lo = 0, hi = n;                                  /* number of radii <= rr */
+        while (lo < hi) { int m = (lo + hi) >> 1; if (rad[m] <= rr) lo = m + 1; else hi = m; }
+        const double Menc = (double)lo / n;
+        const double vc = sqrt(Menc * rr * rr / pow(rr * rr + eps * eps, 1.5));
+        const double R = sqrt(b->x[i] * b->x[i] + b->y[i] * b->y[i]);
+        const double ux = R > 0 ? -b->y[i] / R : 0.0, uy = R > 0 ? b->x[i] / R : 0.0;
+        const double sig = 0.05 * vc;
+        b->vx[i] = vc * ux + sig * gauss(r); b->vy[i] = vc * uy + sig * gauss(r); b->vz[i] = 0.5 * sig * gauss(r);
+    }
+    free(rad);
+    (void)nd;
+    return 0;
+}
+
+int ic_generate(bodies_t *b, const char *kind, int n, uint64_t seed, double spin, double eps)
 {
     rng_t r;
     rng_seed(&r, seed);
@@ -159,6 +202,8 @@ int ic_generate(bodies_t *b, const char *kind, int n, uint64_t seed)
         plummer(&r, b, n1, n2, M2, 0.4);
         shift(b, 0,  n1, -1.0, -0.15, 0.0,  0.7, 0.0, 0.0);
         shift(b, n1, n2,  1.0,  0.15, 0.0, -0.7, 0.0, 0.0);
+    } else if (strcmp(kind, "disk") == 0) {
+        if (disk_galaxy(&r, b, n, eps)) return -1;
     } else {
         return -1;
     }
@@ -171,5 +216,15 @@ int ic_generate(bodies_t *b, const char *kind, int n, uint64_t seed)
         cvx += b->m[i] * b->vx[i]; cvy += b->m[i] * b->vy[i]; cvz += b->m[i] * b->vz[i];
     }
     shift(b, 0, n, -cx / M, -cy / M, -cz / M, -cvx / M, -cvy / M, -cvz / M);
+
+    /* optional solid-body rotation about z: omega = spin * sqrt(M / r_rms^3), so spin = 1 is
+     * roughly the circular frequency at the rms radius.  The centre of mass is at rest at the
+     * origin, so this adds angular momentum but no linear momentum. */
+    if (spin != 0.0) {
+        double r2 = 0.0;
+        for (int i = 0; i < n; i++) r2 += b->m[i] * (b->x[i] * b->x[i] + b->y[i] * b->y[i] + b->z[i] * b->z[i]);
+        const double rrms = sqrt(r2 / M), om = spin * sqrt(M / (rrms * rrms * rrms));
+        for (int i = 0; i < n; i++) { b->vx[i] -= om * b->y[i]; b->vy[i] += om * b->x[i]; }
+    }
     return 0;
 }

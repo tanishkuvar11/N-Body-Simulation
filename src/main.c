@@ -27,7 +27,7 @@
 typedef struct {
     char ic[32];
     int n, steps;
-    double dt, eps, theta;
+    double dt, eps, theta, spin;
     int leafcap;
     char force[32], sched[32];
     int threads, chunk, k;
@@ -49,7 +49,8 @@ static void usage(void)
     if (g_rank) return;
     printf(
 "Usage: mpiexec -n P nbody.exe [options]\n"
-"  --ic uniform|plummer|collide|collapse|virial  initial conditions  (plummer)\n"
+"  --ic uniform|plummer|collide|collapse|virial|disk  initial conditions (plummer)\n"
+"  --spin S                                add solid-body rotation about z (0; 1 ~ circular at r_rms)\n"
 "  --n N                                   number of bodies          (4096)\n"
 "  --steps S                               timesteps                 (100)\n"
 "  --dt DT                                 timestep                  (0.01)\n"
@@ -127,6 +128,7 @@ static int parse(int argc, char **argv, cfg_t *c)
         else if (!strcmp(a, "--dt"))      { NEEDV(); c->dt = atof(v); }
         else if (!strcmp(a, "--eps"))     { NEEDV(); c->eps = atof(v); }
         else if (!strcmp(a, "--theta"))   { NEEDV(); c->theta = atof(v); }
+        else if (!strcmp(a, "--spin"))    { NEEDV(); c->spin = atof(v); }
         else if (!strcmp(a, "--leaf"))    { NEEDV(); c->leafcap = atoi(v); }
         else if (!strcmp(a, "--threads")) { NEEDV(); c->threads = atoi(v); }
         else if (!strcmp(a, "--chunk"))   { NEEDV(); c->chunk = atoi(v); }
@@ -301,7 +303,8 @@ int main(int argc, char **argv)
     }
 
     if (bodies_alloc(&s.b, cfg.n)) die("out of memory (bodies)");
-    if (ic_generate(&s.b, cfg.ic, cfg.n, cfg.seed)) die("--ic must be uniform, plummer, collide, collapse or virial");
+    if (ic_generate(&s.b, cfg.ic, cfg.n, cfg.seed, cfg.spin, cfg.eps))
+        die("--ic must be uniform, plummer, collide, collapse, virial or disk");
     s.b.sort_cost = part_cost;
     if (tree_init(&s.tree, cfg.n, cfg.leafcap)) die("out of memory (tree)");
 
@@ -315,8 +318,8 @@ int main(int argc, char **argv)
 
     if (rank == 0 && !cfg.quiet) {
         printf("== Hybrid MPI+OpenMP+CUDA Barnes-Hut N-body ==\n");
-        printf("ic=%s n=%d steps=%d dt=%g eps=%g theta=%g leaf=%d\n",
-               cfg.ic, cfg.n, cfg.steps, cfg.dt, cfg.eps, cfg.theta, cfg.leafcap);
+        printf("ic=%s n=%d steps=%d dt=%g eps=%g theta=%g leaf=%d spin=%g\n",
+               cfg.ic, cfg.n, cfg.steps, cfg.dt, cfg.eps, cfg.theta, cfg.leafcap, cfg.spin);
         printf("force=%s sched=%s balanced=%s chunk=%d k=%d low=%g high=%g | ranks=%d threads/rank=%d partition=%s\n",
                cfg.force, cfg.sched, cfg.balanced, cfg.chunk, cfg.k, cfg.low, cfg.high, nranks, cfg.threads,
                cfg.partition);
@@ -334,7 +337,11 @@ int main(int argc, char **argv)
     double *rec_tf = (double *)calloc((size_t)S + 1, sizeof(double));   /* force time           */
     double *rec_ts = (double *)calloc((size_t)S + 1, sizeof(double));   /* step time            */
     int    *rec_po = (int *)calloc((size_t)S + 1, sizeof(int));         /* policy used          */
-    if (!rec_lt || !rec_le || !rec_lp || !rec_lc || !rec_tf || !rec_ts || !rec_po) die("out of memory (records)");
+    double *rec_E  = (double *)calloc((size_t)S + 1, sizeof(double));   /* energy (sampled)     */
+    double *rec_K  = (double *)calloc((size_t)S + 1, sizeof(double));   /* kinetic (sampled)    */
+    char   *rec_eh = (char *)calloc((size_t)S + 1, 1);                  /* energy sampled here  */
+    if (!rec_lt || !rec_le || !rec_lp || !rec_lc || !rec_tf || !rec_ts || !rec_po || !rec_E || !rec_K || !rec_eh)
+        die("out of memory (records)");
     for (int st = 0; st <= S; st++) rec_lc[st] = -1.0;
 
     /* ------------------------------------------------ initial forces (t=0) */
@@ -399,6 +406,7 @@ int main(int argc, char **argv)
         /* energy errors are relative to |E0|, or to |W0| for (nearly) unbound systems with E0 ~ 0 */
         Escale = fabs(E0) > 0.1 * fabs(g_pe) ? fabs(E0) : fabs(g_pe);
         Q0 = g_pe != 0 ? 2.0 * g_ke / fabs(g_pe) : 0.0;
+        rec_E[0] = E0; rec_K[0] = g_ke; rec_eh[0] = 1;
     }
     if (rank == 0 && !cfg.quiet && cfg.energy) { printf("t=0  E=%.10f  KE=%.6f  W=%.6f  virial 2KE/|W|=%.4f  |P|=%.3e\n", E0, g_ke, g_pe, Q0, P0); fflush(stdout); }
 
@@ -472,6 +480,7 @@ int main(int argc, char **argv)
             double E, P;
             total_energy(&s, &E, &P);
             if (fabs(E - E0) / Escale > dEmax) dEmax = fabs(E - E0) / Escale;
+            rec_E[step] = E; rec_K[step] = g_ke; rec_eh[step] = 1;
         }
         if (rank == 0 && !cfg.quiet && cfg.print > 0 && step % cfg.print == 0) {
             printf("step %5d  t=%7.3f  step=%8.4fs  lambda=%.3f  lambda_work=%.3f  lambda_pred=%.3f  policy=%s\n",
@@ -488,6 +497,7 @@ int main(int argc, char **argv)
         total_energy(&s, &E1, &P1);
         Q1 = g_pe != 0 ? 2.0 * g_ke / fabs(g_pe) : 0.0;
         if (fabs(E1 - E0) / Escale > dEmax) dEmax = fabs(E1 - E0) / Escale;
+        if (S > 0) { rec_E[S] = E1; rec_K[S] = g_ke; rec_eh[S] = 1; }
     }
     sync_state(&s, cnts, disp);                     /* full velocities for the checksum */
     const unsigned long long csum = checksum(b);
@@ -582,14 +592,18 @@ int main(int argc, char **argv)
         if (cfg.trace[0]) {
             FILE *f = fopen(cfg.trace, "w");
             if (f) {
-                fprintf(f, "step,time,policy,lam_time,lam_static_work,lam_static_pred,lam_check,t_force,t_step\n");
+                fprintf(f, "step,time,policy,lam_time,lam_static_work,lam_static_pred,lam_check,t_force,t_step,"
+                       "energy,kinetic,de_rel\n");
                 for (int st = 0; st <= S; st++)
                 {
                     char lc[32] = "";
+                    char en[96] = ",,";                          /* empty unless sampled (--diag) */
                     if (rec_lc[st] >= 0) snprintf(lc, sizeof lc, "%.6f", rec_lc[st]);
-                    fprintf(f, "%d,%.6f,%s,%.6f,%.6f,%.6f,%s,%.6e,%.6e\n", st, st * cfg.dt,
+                    if (rec_eh[st]) snprintf(en, sizeof en, "%.12e,%.12e,%.4e", rec_E[st], rec_K[st],
+                                             fabs(rec_E[st] - E0) / Escale);
+                    fprintf(f, "%d,%.6f,%s,%.6f,%.6f,%.6f,%s,%.6e,%.6e,%s\n", st, st * cfg.dt,
                             ctl_policy_name((policy_t)rec_po[st]), rec_lt[st], rec_le[st], rec_lp[st], lc,
-                            rec_tf[st], rec_ts[st]);
+                            rec_tf[st], rec_ts[st], en);
                 }
                 fclose(f);
             } else fprintf(stderr, "warning: cannot open %s\n", cfg.trace);
@@ -598,6 +612,7 @@ int main(int argc, char **argv)
     }
 
     free(rec_lt); free(rec_le); free(rec_lp); free(rec_lc); free(rec_tf); free(rec_ts); free(rec_po);
+    free(rec_E); free(rec_K); free(rec_eh);
     ctl_free(&ctl);
     free(cnts); free(disp);
     if (sn.f) fclose(sn.f);

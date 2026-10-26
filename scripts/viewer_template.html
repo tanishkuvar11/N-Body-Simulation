@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>N-Body Viewer</title>
+<style>
+  :root {
+    --bg: #0e0e0d; --panel: rgba(26, 26, 25, 0.86); --ink: #f0efec; --ink2: #c3c2b7; --muted: #8a8984;
+    --line: #3a3a37; --accent: #3987e5;
+    --t0: #3987e5; --t1: #d95926; --t2: #199e70; --t3: #c98500; --t4: #d55181; --t5: #008300; --t6: #9085e9; --t7: #e66767;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink);
+    font: 13px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; overflow: hidden; }
+  #view { position: fixed; inset: 0; }
+  .panel { position: fixed; background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+    padding: 12px 14px; backdrop-filter: blur(6px); }
+  #ctl { top: 16px; left: 16px; width: 290px; max-width: calc(100vw - 32px); }
+  #hud { top: 16px; right: 16px; width: 250px; }
+  h1 { font-size: 15px; margin: 0 0 2px; }
+  .sub { color: var(--muted); font-size: 12px; margin-bottom: 10px; }
+  label { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 7px 0; color: var(--ink2); }
+  select, button { background: #222220; color: var(--ink); border: 1px solid var(--line); border-radius: 6px;
+    padding: 5px 8px; font: inherit; cursor: pointer; }
+  button:hover, select:hover { border-color: var(--accent); }
+  input[type=range] { flex: 1; accent-color: var(--accent); }
+  .row { display: flex; gap: 6px; align-items: center; margin: 8px 0; }
+  .row button { flex: 1; }
+  .big { font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .kv { display: flex; justify-content: space-between; color: var(--ink2); margin: 3px 0; font-variant-numeric: tabular-nums; }
+  .kv b { color: var(--ink); font-weight: 600; }
+  .pill { display: inline-block; padding: 1px 8px; border-radius: 99px; font-size: 12px; font-weight: 600; }
+  .pol-static { background: #2a2a28; color: var(--ink2); border: 1px solid var(--line); }
+  .pol-dynamic, .pol-guided { background: #184f95; color: #fff; }
+  #bars { display: grid; grid-template-columns: 22px 1fr 52px; gap: 3px 6px; align-items: center; margin-top: 8px; font-size: 11px; color: var(--ink2); }
+  .bar { height: 9px; border-radius: 0 4px 4px 0; transition: width 0.12s; }
+  .legend { display: flex; flex-wrap: wrap; gap: 4px 10px; margin-top: 8px; font-size: 11px; color: var(--ink2); }
+  .sw { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 4px; vertical-align: -1px; }
+  #ramp { height: 8px; border-radius: 4px; margin-top: 8px; background: linear-gradient(90deg, #184f95, #3987e5, #86b6ef, #e8f1fc); }
+  .note { color: var(--muted); font-size: 11px; margin-top: 8px; }
+  @media (max-width: 720px) {
+    #hud { top: auto; bottom: 16px; right: 16px; left: 16px; width: auto; }
+    #ctl { width: auto; right: 16px; }
+    .hide-sm { display: none; }
+  }
+</style>
+</head>
+<body>
+<div id="view"></div>
+
+<div id="ctl" class="panel">
+  <h1>Barnes–Hut N-body</h1>
+  <div class="sub" id="subtitle"></div>
+  <label>Scenario <select id="ds"></select></label>
+  <div class="row">
+    <button id="play">Pause</button>
+    <button id="restart">Restart</button>
+  </div>
+  <label>Time <input id="frame" type="range" min="0" max="1" step="0.001" value="0"></label>
+  <label>Speed <input id="speed" type="range" min="0.2" max="4" step="0.1" value="1"></label>
+  <label>Colour by
+    <select id="color"><option value="thread">computing thread</option><option value="speed">speed</option></select>
+  </label>
+  <label>Star size <input id="size" type="range" min="0.5" max="6" step="0.1" value="3"></label>
+  <label class="hide-sm">Auto-rotate <input id="rot" type="checkbox" checked></label>
+  <div id="legend" class="legend"></div>
+  <div id="ramp" style="display:none"></div>
+  <div class="note hide-sm">Drag to orbit · scroll to zoom · right-drag to pan. Under <b>static</b>, each thread owns one
+    contiguous Morton block, so its colour is one region of space. Once the controller switches to <b>dynamic</b>,
+    work is handed out in small chunks and the colours mix.</div>
+</div>
+
+<div id="hud" class="panel">
+  <div class="kv"><span>time</span><span class="big" id="t">0.00</span></div>
+  <div class="kv"><span>schedule</span><span id="pol" class="pill pol-static">static</span></div>
+  <div class="kv"><span>imbalance λ</span><b id="lam">0.000</b></div>
+  <div class="kv"><span>switches in run</span><b id="sw">0</b></div>
+  <div id="bars"></div>
+  <div class="note">Per-thread force-loop time for this step (ms).</div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+const DATA = /*__DATA__*/null;
+const THREAD_COLORS = ["#3987e5", "#d95926", "#199e70", "#c98500", "#d55181", "#008300", "#9085e9", "#e66767"];
+const RAMP = [[0x18, 0x4f, 0x95], [0x39, 0x87, 0xe5], [0x86, 0xb6, 0xef], [0xe8, 0xf1, 0xfc]];
+
+function b64(s, Type) {
+  const bin = atob(s), u8 = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+  return new Type(u8.buffer);
+}
+function hexRgb(h) { const v = parseInt(h.slice(1), 16); return [(v >> 16) / 255, ((v >> 8) & 255) / 255, (v & 255) / 255]; }
+function rampAt(x) {
+  x = Math.min(1, Math.max(0, x)) * (RAMP.length - 1);
+  const i = Math.min(RAMP.length - 2, Math.floor(x)), f = x - i, a = RAMP[i], b = RAMP[i + 1];
+  return [(a[0] + (b[0] - a[0]) * f) / 255, (a[1] + (b[1] - a[1]) * f) / 255, (a[2] + (b[2] - a[2]) * f) / 255];
+}
+
+// ---------------------------------------------------------------- scene
+const view = document.getElementById("view");
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+view.appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0e0e0d);
+const camera = new THREE.PerspectiveCamera(50, 1, 0.01, 100);
+camera.position.set(0, -2.1, 1.35);
+const controls = new THREE.OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.autoRotate = true;
+controls.autoRotateSpeed = 0.6;
+
+function dotTexture() {
+  const c = document.createElement("canvas"); c.width = c.height = 64;
+  const g = c.getContext("2d"), grd = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+  grd.addColorStop(0, "rgba(255,255,255,1)"); grd.addColorStop(0.35, "rgba(255,255,255,0.85)");
+  grd.addColorStop(1, "rgba(255,255,255,0)");
+  g.fillStyle = grd; g.fillRect(0, 0, 64, 64);
+  return new THREE.CanvasTexture(c);
+}
+const material = new THREE.PointsMaterial({ size: 0.016, vertexColors: true, map: dotTexture(), transparent: true,
+  depthWrite: false, blending: THREE.AdditiveBlending, sizeAttenuation: true });
+const geometry = new THREE.BufferGeometry();
+const points = new THREE.Points(geometry, material);
+scene.add(points);
+
+function resize() {
+  const w = window.innerWidth, h = window.innerHeight;
+  renderer.setSize(w, h); camera.aspect = w / h; camera.updateProjectionMatrix();
+}
+window.addEventListener("resize", resize); resize();
+
+// ---------------------------------------------------------------- state
+let ds = null, pos = null, own = null, nF = 0, cur = 0, playing = true, last = performance.now();
+let posAttr, colAttr;
+const el = id => document.getElementById(id);
+
+function load(i) {
+  const d = DATA[i];
+  ds = d; nF = d.meta.length; cur = 0;
+  pos = b64(d.pos, Int16Array); own = b64(d.own, Uint8Array);
+  posAttr = new THREE.BufferAttribute(new Float32Array(d.n * 3), 3);
+  colAttr = new THREE.BufferAttribute(new Float32Array(d.n * 3), 3);
+  geometry.setAttribute("position", posAttr); geometry.setAttribute("color", colAttr);
+  el("subtitle").textContent = `N = ${d.n.toLocaleString()} bodies · ${d.w} OpenMP threads · ${nF} frames`;
+  el("sw").textContent = d.switches;
+  const bars = el("bars"); bars.innerHTML = "";
+  for (let t = 0; t < d.w; t++) {
+    bars.insertAdjacentHTML("beforeend",
+      `<span>t${t}</span><div><div class="bar" id="b${t}" style="background:${THREAD_COLORS[t % 8]}"></div></div><span id="v${t}"></span>`);
+  }
+  legend();
+  draw(0);
+}
+
+function legend() {
+  const byThread = el("color").value === "thread";
+  el("ramp").style.display = byThread ? "none" : "block";
+  el("legend").innerHTML = byThread
+    ? THREAD_COLORS.slice(0, ds.w).map((c, t) => `<span><span class="sw" style="background:${c}"></span>thread ${t}</span>`).join("")
+    : "<span>slow</span><span style='margin-left:auto'>fast</span>";
+}
+
+function draw(x) {                      // x in [0, nF-1], fractional = interpolate between frames
+  const n = ds.n, f0 = Math.floor(x), f1 = Math.min(nF - 1, f0 + 1), a = x - f0, s = ds.lim / 32767;
+  const p = posAttr.array, c = colAttr.array, o0 = f0 * n * 3, o1 = f1 * n * 3;
+  const byThread = el("color").value === "thread";
+  const tc = THREAD_COLORS.map(hexRgb);
+  const dt = Math.max(1e-6, ds.meta[f1].t - ds.meta[f0].t);
+  let vmax = 0;
+  const sp = byThread ? null : new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    const k = 3 * i;
+    for (let d = 0; d < 3; d++) p[k + d] = (pos[o0 + k + d] * (1 - a) + pos[o1 + k + d] * a) * s;
+    if (!byThread) {
+      const fa = f1 > f0 ? f0 : Math.max(0, f0 - 1), fb = f1 > f0 ? f1 : f0, oa = fa * n * 3, ob = fb * n * 3;
+      const dx = (pos[ob + k] - pos[oa + k]) * s, dy = (pos[ob + k + 1] - pos[oa + k + 1]) * s, dz = (pos[ob + k + 2] - pos[oa + k + 2]) * s;
+      sp[i] = Math.sqrt(dx * dx + dy * dy + dz * dz) / Math.max(1e-6, ds.meta[fb].t - ds.meta[fa].t || dt);
+      if (sp[i] > vmax) vmax = sp[i];
+    }
+  }
+  const fo = (a < 0.5 ? f0 : f1) * n;
+  for (let i = 0; i < n; i++) {
+    const rgb = byThread ? tc[own[fo + i] % 8] : rampAt(Math.sqrt(sp[i] / (vmax || 1)));
+    c[3 * i] = rgb[0]; c[3 * i + 1] = rgb[1]; c[3 * i + 2] = rgb[2];
+  }
+  posAttr.needsUpdate = true; colAttr.needsUpdate = true;
+
+  const m = ds.meta[a < 0.5 ? f0 : f1];
+  el("t").textContent = (m.t).toFixed(2);
+  el("lam").textContent = m.lam.toFixed(3);
+  const pol = el("pol"); pol.textContent = m.pol; pol.className = "pill pol-" + m.pol;
+  const wmax = Math.max(...m.wt, 1e-9);
+  m.wt.forEach((v, t) => { el("b" + t).style.width = (100 * v / wmax) + "%"; el("v" + t).textContent = v.toFixed(2); });
+  el("frame").value = x / Math.max(1, nF - 1);
+}
+
+// ---------------------------------------------------------------- UI
+DATA.forEach((d, i) => el("ds").insertAdjacentHTML("beforeend", `<option value="${i}">${d.title}</option>`));
+el("ds").onchange = e => load(+e.target.value);
+el("play").onclick = () => { playing = !playing; el("play").textContent = playing ? "Pause" : "Play"; };
+el("restart").onclick = () => { cur = 0; playing = true; el("play").textContent = "Pause"; };
+el("frame").oninput = e => { cur = +e.target.value * (nF - 1); playing = false; el("play").textContent = "Play"; draw(cur); };
+el("color").onchange = () => { legend(); draw(cur); };
+el("size").oninput = e => { material.size = 0.01 * +e.target.value; };
+el("rot").onchange = e => { controls.autoRotate = e.target.checked; };
+material.size = 0.01 * +el("size").value;
+
+function loop(now) {
+  const dtw = Math.min(0.1, (now - last) / 1000); last = now;
+  if (playing && ds) {
+    cur += dtw * 12 * +el("speed").value;            // ~12 frames per second at speed 1
+    if (cur > nF - 1) cur = 0;
+    draw(cur);
+  }
+  controls.update();
+  renderer.render(scene, camera);
+  requestAnimationFrame(loop);
+}
+load(0);
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

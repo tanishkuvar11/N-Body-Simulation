@@ -41,8 +41,10 @@ typedef struct {
 int  bodies_alloc(bodies_t *b, int n);
 void bodies_free(bodies_t *b);
 
-/* initial conditions: uniform | plummer | collide | collapse.  Returns 0 on success. */
-int  ic_generate(bodies_t *b, const char *kind, int n, uint64_t seed);
+/* initial conditions: uniform | plummer | collide | collapse | virial | disk, plus optional
+ * solid-body rotation (spin, see init.c); eps is the softening (disk circular velocities).
+ * Returns 0 on success. */
+int  ic_generate(bodies_t *b, const char *kind, int n, uint64_t seed, double spin, double eps);
 
 /* Morton (Z-order) sort of all bodies; permutes x,y,z,vx,vy,vz,m,id (and cost if sort_cost).
  * Runs on the current OpenMP thread count; the result does not depend on it. */

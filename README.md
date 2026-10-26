@@ -85,7 +85,8 @@ bin/nbody.exe --force bh-gpu --gpu-float --leaf 256 --n 65536 --threads 8 --pin 
 
 | option | meaning (default) |
 |---|---|
-| `--ic uniform\|plummer\|collide\|collapse\|virial` | initial conditions (`plummer`) |
+| `--ic uniform\|plummer\|collide\|collapse\|virial\|disk` | initial conditions (`plummer`); `disk` = rotating disk galaxy with a bulge |
+| `--spin S` | add solid-body rotation about z to any input (0; 1 ≈ circular speed at the rms radius) |
 | `--n`, `--steps`, `--dt`, `--eps`, `--theta`, `--leaf` | bodies (4096), steps (100), timestep (0.01), softening (0.05), opening angle (0.5), bodies per tree leaf (8) |
 | `--force bh\|direct\|gpu-direct\|bh-gpu` | force back end (`bh`) |
 | `--sched static\|dynamic\|guided\|adaptive` | OpenMP schedule (`static`) |
@@ -97,7 +98,7 @@ bin/nbody.exe --force bh-gpu --gpu-float --leaf 256 --n 65536 --threads 8 --pin 
 | `--gpu-float`, `--near-cap C` | single-precision GPU kernels / near-field ranges per body (128) |
 | `--verify` | compare the initial forces with an exact direct sum (prints RMS / max relative error) |
 | `--diag D`, `--no-energy` | energy/momentum check every D steps (start/end only by default), or none |
-| `--trace FILE`, `--csv FILE`, `--label X` | per-step imbalance/policy trace; append a summary row |
+| `--trace FILE`, `--csv FILE`, `--label X` | per-step imbalance/policy trace (plus energy at `--diag` steps); append a summary row |
 | `--snap FILE`, `--snap-every K` | positions + owning thread every K steps, for the animation |
 
 Every run ends with a machine-readable `RESULT key=value …` line, which includes a bitwise
@@ -127,6 +128,30 @@ the adaptive controller switches to dynamic, the colours mix and the bars level 
 the moment of the switch; before it, both runs use the same schedule, so any gap there is timing
 noise. Snapshots are written with `--snap FILE --snap-every K`, and recording them does not change
 the results.
+
+### More visuals
+
+```bash
+python scripts/visualize.py     # 6 extra figures -> results/figures/extra/  (about a minute)
+python scripts/export_web.py    # interactive 3D viewer -> results/web/viewer.html
+```
+
+| figure | shows |
+|---|---|
+| [`ic_gallery.png`](results/figures/extra/ic_gallery.png) | all 7 inputs (incl. disk galaxy and spinning collapse) at t = 0, 0.75, 1.5 |
+| [`imbalance_by_ic.png`](results/figures/extra/imbalance_by_ic.png) | work imbalance a static schedule would have, over time, per input |
+| [`energy_drift.png`](results/figures/extra/energy_drift.png) | relative energy error over time, per input |
+| [`phase_breakdown.png`](results/figures/extra/phase_breakdown.png) | force / communication / sort / tree / integration time per ranks × threads split |
+| [`mpi_heatmap.png`](results/figures/extra/mpi_heatmap.png) | speedup over the ranks × threads grid |
+| [`efficiency_heatmap.png`](results/figures/extra/efficiency_heatmap.png) | parallel efficiency for every input × schedule × thread count |
+
+`results/web/viewer.html` is one self-contained page: open it in a browser (it loads three.js from a
+CDN) to orbit, zoom and scrub through four scenarios. It colours each star by the thread that
+computed it, or by speed, and shows the live per-thread loop times, λ and the active schedule.
+Some browsers block large local files; in that case serve the folder with
+`python -m http.server --directory results/web` and open `http://localhost:8000/viewer.html`.
+
+![gallery](results/figures/extra/ic_gallery.png)
 
 ### Reproducing everything
 
@@ -253,6 +278,8 @@ scripts/bench.py       benchmark experiments
 scripts/analyze.py     figures and tables
 scripts/animate.py     static-vs-adaptive animation (uses --snap)
 scripts/analyze_future.py  tables + figure for the extensions -> results/future/
+scripts/visualize.py   extra figures (input gallery, energy, phase breakdown, heatmaps)
+scripts/export_web.py  interactive 3D viewer (template: scripts/viewer_template.html)
 results/               CSVs, traces, figures, summary.md, validation.md
 third_party/cuda/      CUDA headers + NVRTC (pip wheels; build/run time only)
 ```
