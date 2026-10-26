@@ -91,7 +91,8 @@ bin/nbody.exe --force bh-gpu --gpu-float --leaf 256 --n 65536 --threads 8 --pin 
 | `--sched static\|dynamic\|guided\|adaptive` | OpenMP schedule (`static`) |
 | `--threads T`, `--chunk C` | OpenMP threads per rank (1), dynamic/guided chunk (8) |
 | `--k K`, `--low L`, `--high H` | controller check interval (5) and hysteresis thresholds (0.05 / 0.15) |
-| `--balanced dynamic\|guided` | adaptive: schedule used once imbalanced (`dynamic`) |
+| `--balanced dynamic\|guided\|auto` | adaptive: schedule used once imbalanced (`dynamic`); `auto` tries dynamic(C), dynamic(8C) and guided(C) and keeps the fastest |
+| `--partition equal\|cost` | MPI rank blocks: equal body counts, or equal measured work (cost zones) (`equal`) |
 | `--pin`, `--cpus LIST` | pin threads: one per physical core, fastest cores first / an explicit CPU list |
 | `--gpu-float`, `--near-cap C` | single-precision GPU kernels / near-field ranges per body (128) |
 | `--verify` | compare the initial forces with an exact direct sum (prints RMS / max relative error) |
@@ -134,6 +135,14 @@ python build.py
 python scripts/validate.py      # 7 correctness checks  -> results/validation.md
 python scripts/bench.py         # all experiments, 3 repetitions (several hours) -> results/*.csv
 python scripts/analyze.py       # figures + tables -> results/figures/, results/summary.md
+```
+
+The future-work extensions (see Design) have their own experiment, analysis and validation output:
+
+```bash
+python scripts/bench.py --exp future --gate-every 0 --out results/future
+python scripts/analyze_future.py                 # -> results/future/summary.md, future.png
+python scripts/validate.py --out results/future/validation.md
 ```
 
 `bench.py --quick --reps 1` runs a small smoke-test version in a few minutes. `bench.py` includes a
@@ -201,6 +210,25 @@ it, and every rank sorts and builds the same tree from the same data. The final 
 **bit-identical** for every schedule, thread count, rank count and controller decision. This is
 checked by a checksum in validation check V1.
 
+### Extensions (the former "future work")
+
+* **Cost-weighted MPI partitioning** (`--partition cost`). Each body's cost (tree nodes visited +
+  interactions) is all-gathered after the force phase and permuted with the Morton sort. After the
+  sort, every rank cuts the Morton order into `P` pieces of equal summed cost (`partition_by_cost`
+  in `src/morton.c`). All ranks hold the same costs, so they compute the same cut without extra
+  communication. This fixes the rank-level imbalance that the OpenMP controller cannot reach.
+* **Parallel Morton sort and tree build.** The sort is a parallel sample sort: splitters from a
+  sorted key sample, one stable scatter into one bucket per thread, then a per-bucket LSD radix
+  sort. The tree is built top-down with OpenMP tasks for subtrees above 4096 bodies, with node slots
+  claimed atomically. Both run sequentially below N = 32768 (`PAR_MIN`), where measurement showed
+  no gain; libgomp barriers cost about 50 µs on Windows.
+* **Controller auto mode** (`--balanced auto`). On each static → balanced switch, the controller
+  tries dynamic(C), dynamic(8C) and guided(C) for one k-step window each. It measures throughput
+  (work units per second of the slowest thread, which normalises for workload drift) and keeps the
+  fastest. The imbalance check keeps running during the trial.
+
+All three keep the bit-identical final state (validation V1 and V1b).
+
 ### Timing
 
 MinGW's `omp_get_wtime()` has only 1 ms resolution, so all timing uses `QueryPerformanceCounter`
@@ -213,8 +241,8 @@ build.py               build script (Windows MinGW + MS-MPI, or Linux mpicc)
 src/nbody.h            shared types and declarations
 src/main.c             driver: CLI, MPI decomposition, time loop, diagnostics, CSV/trace output
 src/init.c             initial conditions + deterministic RNG (xoshiro256**)
-src/morton.c           Morton keys, radix sort, permutation
-src/tree.c             Barnes-Hut octree construction
+src/morton.c           Morton keys, parallel sample sort, permutation, cost-weighted rank partition
+src/tree.c             Barnes-Hut octree construction (OpenMP tasks)
 src/forces.c           direct / Barnes-Hut / GPU / hybrid force loops, energy diagnostics
 src/sched.c            adaptive controller, imbalance metrics, high-resolution clock
 src/affinity.c         thread pinning (P-cores first via EfficiencyClass)
@@ -224,6 +252,7 @@ scripts/validate.py    correctness checks
 scripts/bench.py       benchmark experiments
 scripts/analyze.py     figures and tables
 scripts/animate.py     static-vs-adaptive animation (uses --snap)
+scripts/analyze_future.py  tables + figure for the extensions -> results/future/
 results/               CSVs, traces, figures, summary.md, validation.md
 third_party/cuda/      CUDA headers + NVRTC (pip wheels; build/run time only)
 ```

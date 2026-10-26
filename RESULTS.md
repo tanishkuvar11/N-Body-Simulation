@@ -228,5 +228,73 @@ tested idea without a measurable benefit. The default stays `dynamic`, as in the
 5. CUDA: the fp32 tiled kernel is 88× faster than the 8-thread CPU direct sum. The Barnes–Hut + GPU
    near-field hybrid is 1.3–1.4× faster than the CPU tree code and also more accurate.
 
-**Future work:** cost-weighted partitioning across MPI ranks (rank imbalance up to 0.11); including
-guided and the chunk size in the controller's choices; a parallel tree build; and multi-node runs.
+**Future work:** three of the four items listed here originally are now implemented; see §9.
+Multi-node runs are still open.
+
+## 9. Extensions: the former future work
+
+Implemented after the main study and measured on a **second machine**: AMD Ryzen 7 7730U (8
+identical cores / 16 threads), Windows 11, GCC 15.2, MS-MPI 10.1, no NVIDIA GPU. Medians of 2
+repetitions, no thermal gate, threads not pinned. Absolute times are not comparable with §1–§8. Raw
+data are in `results/future/` (`future.csv`, `summary.md`, `future.png`,
+`validation.md`).
+
+![future](results/future/future.png)
+
+**Correctness.** All three extensions keep the bit-identical final state. On this machine, V1 now
+covers 13 configurations, including `--partition cost` with 3 and 4 ranks and `--balanced auto` with
+forced switching, and all give one checksum, the same one the unmodified code gives. A new check,
+V1b, confirms the parallel sort and tree build at N = 70,000 for 1, 3 and 8 threads. V4–V7 pass
+unchanged; V2–V3 are skipped because this machine has no CUDA GPU.
+
+**9.1 Cost-weighted MPI partitioning** (`--partition cost`, N = 65,536, 100 steps). Rank boundaries
+cut the Morton order into pieces of equal measured work instead of equal body counts.
+
+| input | ranks × threads | schedule | equal → cost: time | rank imbalance |
+|---|---|---|---|---|
+| collide | 4 × 1 | static | 27.25 → 22.57 s (**−17 %**) | 0.095 → **0.026** |
+| collide | 4 × 2 | adaptive | 16.30 → 15.60 s (−4 %) | 0.100 → 0.065 |
+| collide | 4 × 2 | static | 16.79 → 16.51 s (−2 %) | 0.078 → 0.074 |
+| collapse | 4 × 1 | static | 14.35 → 14.44 s (+1 %) | 0.055 → 0.032 |
+| collide / collapse | 2 × 4 | both | −6 % … +6 % | ≈ 0.02 either way |
+
+With one thread per rank, rank imbalance is the only imbalance, and cost zones remove most of it:
+on colliding clusters, 17 % faster with 3.6 → 0.8 s less waiting inside `MPI_Allgatherv`. With
+several threads per rank, the "rank imbalance" metric also contains each rank's internal thread
+imbalance, so the gain is smaller. With 2 ranks the imbalance was already about 0.02, and the
+differences are within run-to-run noise. The cost model (nodes visited + interactions) slightly
+under-weights the dense core, which is why 4 × 2 static keeps λ_rank ≈ 0.07. Weighting by measured
+time per rank would be the next refinement.
+
+**9.2 Parallel Morton sort and tree build** (Plummer, time per step):
+
+| N | sort 1 → 8 threads | tree build 1 → 8 threads |
+|---|---|---|
+| 65,536 | 3.17 → 1.53 ms (2.1×) | 1.31 → 0.53 ms (2.5×) |
+| 262,144 | 15.7 → 7.2 ms (2.2×) | 5.43 → 2.14 ms (2.5×) |
+
+Both phases are memory-bound (gathering 8 arrays through the permutation), so they scale less
+well than the force loop. The first version, a parallel LSD radix sort, was *slower* than the
+sequential one at 8 threads. Each thread owned only a few elements per bucket, so the scatter
+false-shared cache lines, and each of its roughly 25 barriers costs about 50 µs in MinGW's libgomp.
+The sample sort needs 5 synchronisation points. Below N = 32,768 both phases stay sequential,
+because there the parallel version brought no gain.
+
+**9.3 Controller auto mode** (`--balanced auto`, N = 65,536, 8 threads, 150 steps; time / static):
+
+| input | guided (fixed) | adaptive → dynamic | adaptive → auto | auto picked |
+|---|---|---|---|---|
+| uniform | 0.926 | 0.991 | 0.975 | stayed static |
+| plummer | **0.835** | 0.903 | 0.902 | dynamic(8), or stayed static |
+| collide | **0.890** | 0.936 | 0.908 | dynamic(8) or guided(8) |
+| collapse | 0.991 | 0.993 | **0.980** | dynamic(64) |
+
+Auto is as fast as or slightly faster than the default controller on every input, and it picks
+different schedules for different inputs (guided on the colliding clusters, a larger chunk on the
+collapse). It does **not** close the gap to fixed `guided` on Plummer and collide. The controller
+still spends the early, balanced part of each run in static, plus three trial windows. The
+conclusion of §2 stands: the controller's value is that nobody has to pick a schedule, not that it
+beats the best fixed one.
+
+**Still open:** multi-node runs (only one machine was available), and time-weighted rather than
+work-weighted rank costs.

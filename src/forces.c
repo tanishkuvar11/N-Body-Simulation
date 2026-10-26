@@ -29,7 +29,7 @@ int sim_init_forces(sim_t *s, int gpu_double)
     if (!s->thr_time || !s->thr_work || !s->owner) return -1;
 
     if (s->mode == FORCE_GPU_DIRECT || s->mode == FORCE_BH_GPU) {
-        const int cnt = s->hi - s->lo;
+        const int cnt = s->max_own;                 /* own blocks may grow with --partition cost */
         const int need_lists = (s->mode == FORCE_BH_GPU);
         if (need_lists && s->near_cap < 1) s->near_cap = 128;
         if (gpu_init(s->n, cnt, gpu_double, need_lists ? s->near_cap : 0) != 0) {

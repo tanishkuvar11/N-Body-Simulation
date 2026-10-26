@@ -16,7 +16,8 @@ int bodies_alloc(bodies_t *b, int n)
     b->n = n;
     size_t N = (size_t)n;
     double **dp[] = { &b->x, &b->y, &b->z, &b->vx, &b->vy, &b->vz, &b->m,
-                      &b->ax, &b->ay, &b->az, &b->cost, &b->tmp };
+                      &b->ax, &b->ay, &b->az, &b->cost,
+                      &b->tmp[0], &b->tmp[1], &b->tmp[2], &b->tmp[3], &b->tmp[4], &b->tmp[5], &b->tmp[6], &b->tmp[7] };
     for (size_t i = 0; i < sizeof dp / sizeof dp[0]; i++) {
         *dp[i] = (double *)xalloc(N * sizeof(double));
         if (!*dp[i]) return -1;
@@ -34,7 +35,8 @@ int bodies_alloc(bodies_t *b, int n)
 void bodies_free(bodies_t *b)
 {
     free(b->x); free(b->y); free(b->z); free(b->vx); free(b->vy); free(b->vz);
-    free(b->m); free(b->ax); free(b->ay); free(b->az); free(b->cost); free(b->tmp);
+    free(b->m); free(b->ax); free(b->ay); free(b->az); free(b->cost);
+    for (int k = 0; k < 8; k++) free(b->tmp[k]);
     free(b->id); free(b->tmpi); free(b->key); free(b->key2); free(b->idx); free(b->idx2);
     memset(b, 0, sizeof *b);
 }

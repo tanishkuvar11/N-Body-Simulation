@@ -7,6 +7,10 @@ Experiments (results/<exp>.csv, one row per run, appended; reruns resume where t
   gpu     CUDA: tiled direct kernel vs CPU direct sum; Barnes-Hut CPU vs BH+GPU hybrid
   ctl     controller sensitivity (check interval k, thresholds) and dynamic chunk size
   small   overhead of dynamic scheduling at small N on the balanced (uniform) input
+  ext     controller switching to guided instead of dynamic
+  future  extensions: --partition cost, --balanced auto, parallel sort + tree build
+          (run on the second machine: python scripts/bench.py --exp future --gate-every 0
+           --out results/future)
 
 Laptop CPUs drift with temperature, so within each repetition the runs of an experiment
 are executed in a shuffled order, with a short pause between runs; analysis uses medians.
@@ -130,8 +134,37 @@ def exp_ext(quick):
     return runs
 
 
+def exp_future(quick):
+    """Future-work extensions: cost-weighted MPI partitioning, controller auto mode,
+    parallel Morton sort + tree build."""
+    runs = []
+    n = 16384 if quick else 65536
+    for ic in ["collide", "collapse"]:
+        for p, t in [(4, 1), (4, 2), (2, 4)]:
+            base = BASE + ["--ic", ic, "--n", n, "--threads", t]
+            base[1] = 30 if quick else 100
+            for s in (["static"] if t == 1 else ["static", "adaptive"]):
+                for part in ["equal", "cost"]:
+                    runs.append(Run("future", f"part_{ic}_P{p}_T{t}_{s}_{part}", base + ["--sched", s, "--partition", part],
+                                    ranks=p))
+    for ic in ICS:
+        base = BASE + ["--ic", ic, "--n", n, "--threads", 8]
+        if quick:
+            base[1] = 30
+        runs.append(Run("future", f"auto_{ic}_static", base + ["--sched", "static"]))
+        runs.append(Run("future", f"auto_{ic}_guided", base + ["--sched", "guided"]))
+        runs.append(Run("future", f"auto_{ic}_adaptive-dyn", base + ["--sched", "adaptive"]))
+        runs.append(Run("future", f"auto_{ic}_adaptive-auto", base + ["--sched", "adaptive", "--balanced", "auto"]))
+    for nn in ([65536] if quick else [65536, 262144]):
+        for t in [1, 8]:
+            runs.append(Run("future", f"build_n{nn}_T{t}",
+                            ["--ic", "plummer", "--n", nn, "--steps", 20, "--theta", 2.0, "--no-energy", "--print", 0,
+                             "--threads", t]))
+    return runs
+
+
 EXPERIMENTS = {"sched": exp_sched, "mpi": exp_mpi, "gpu": exp_gpu, "ctl": exp_ctl, "small": exp_small,
-               "ext": exp_ext}
+               "ext": exp_ext, "future": exp_future}
 
 
 CALIB_ARGS = BASE + ["--ic", "uniform", "--n", 16384, "--threads", 8, "--pin", "--sched", "static"]

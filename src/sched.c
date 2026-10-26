@@ -20,6 +20,14 @@
  * Under STATIC, W_i == B_i, so this is exactly the measured loop time t_i - i.e. the
  * synopsis' metric.  Under DYNAMIC it predicts static's imbalance including both the
  * workload (clustering) and differences in core speed (e.g. P- vs E-cores).
+ *
+ * --balanced auto (extension): which balanced schedule is best (dynamic with a small or a
+ * large chunk, or guided) depends on the input and the machine.  On every STATIC -> BALANCED
+ * switch the controller tries each candidate for one k-step window, measuring its
+ * throughput (work units per second of the slowest thread), and keeps the fastest.  Work
+ * units rather than raw time are compared because the workload changes from window to
+ * window.  The imbalance check keeps running during the trial, so a return to STATIC is
+ * never delayed by it.
  */
 #include "nbody.h"
 
@@ -63,23 +71,39 @@ void ctl_apply(const controller_t *c)
 {
     switch (c->pol) {
     case POL_STATIC:  omp_set_schedule(omp_sched_static, 0); break;
-    case POL_DYNAMIC: omp_set_schedule(omp_sched_dynamic, c->chunk); break;
-    case POL_GUIDED:  omp_set_schedule(omp_sched_guided, c->chunk); break;
+    case POL_DYNAMIC: omp_set_schedule(omp_sched_dynamic, c->cur_chunk); break;
+    case POL_GUIDED:  omp_set_schedule(omp_sched_guided, c->cur_chunk); break;
     }
+}
+
+static void install(controller_t *c, policy_t p, int chunk)
+{
+    c->pol = p;
+    c->cur_chunk = chunk;
+    ctl_apply(c);
 }
 
 static void reset_window(controller_t *c)
 {
     for (int t = 0; t < c->maxthr; t++) c->acc_t[t] = c->acc_w[t] = c->acc_b[t] = 0.0;
+    c->acc_wall = 0.0;
     c->nobs = 0;
 }
 
 int ctl_init(controller_t *c, sched_kind_t kind, int chunk, int k, double low, double high, int maxthr,
-             policy_t balanced)
+             balanced_t balanced)
 {
-    c->balanced = (balanced == POL_GUIDED) ? POL_GUIDED : POL_DYNAMIC;
+    c->balanced = balanced;
     c->kind = kind;
     c->chunk = chunk < 1 ? 1 : chunk;
+    c->cur_chunk = c->chunk;
+    /* auto candidates: dynamic with the configured chunk, dynamic with a larger chunk
+     * (better locality), and guided (contiguous leading chunks + small trailing ones) */
+    c->ncand = 0;
+    c->cand_pol[c->ncand] = POL_DYNAMIC; c->cand_chunk[c->ncand++] = c->chunk;
+    c->cand_pol[c->ncand] = POL_DYNAMIC; c->cand_chunk[c->ncand++] = c->chunk * 8;
+    c->cand_pol[c->ncand] = POL_GUIDED;  c->cand_chunk[c->ncand++] = c->chunk;
+    c->trial = -1; c->chosen = -1; c->trials = 0;
     c->k = k < 1 ? 1 : k;
     c->low = low;
     c->high = high;
@@ -176,11 +200,14 @@ void ctl_observe(controller_t *c, const double *thr_time, const double *thr_work
     double *b = nthr <= 64 ? blk : (double *)malloc(sizeof(double) * (size_t)nthr);
     if (!b) return;
     static_blocks(cost, lo, hi, nthr, b);
+    double slowest = 0.0;
     for (int t = 0; t < nthr; t++) {
         c->acc_t[t] += thr_time[t];
         c->acc_w[t] += thr_work[t];
         c->acc_b[t] += b[t];
+        if (thr_time[t] > slowest) slowest = thr_time[t];
     }
+    c->acc_wall += slowest;
     c->nobs++;
     if (b != blk) free(b);
 }
@@ -193,16 +220,52 @@ int ctl_update(controller_t *c, int step)
     const double lam = (c->pol == POL_STATIC)
                      ? imbalance_of(c->acc_t, c->nthr)
                      : predicted_static_imbalance(c->acc_b, c->acc_t, c->acc_w, c->nthr);
+    double work = 0.0;
+    for (int t = 0; t < c->nthr; t++) work += c->acc_w[t];
+    const double rate = c->acc_wall > 0.0 ? work / c->acc_wall : 0.0;
     c->last_lambda = lam;
     reset_window(c);
 
-    policy_t next = c->pol;
-    if (c->pol == POL_STATIC && lam > c->high) next = c->balanced;
-    else if (c->pol == c->balanced && lam < c->low) next = POL_STATIC;
+    if (c->pol == POL_STATIC) {
+        if (lam <= c->high) return 0;
+        c->switches++;
+        switch (c->balanced) {
+        case BAL_DYNAMIC: install(c, POL_DYNAMIC, c->chunk); break;
+        case BAL_GUIDED:  install(c, POL_GUIDED, c->chunk); break;
+        case BAL_AUTO:                      /* start a trial round with candidate 0 */
+            c->trial = 0;
+            install(c, c->cand_pol[0], c->cand_chunk[0]);
+            break;
+        }
+        return 1;
+    }
 
-    if (next == c->pol) return 0;
-    c->pol = next;
-    c->switches++;
-    ctl_apply(c);
-    return 1;
+    /* balanced policy installed */
+    if (lam < c->low) {
+        c->trial = -1;
+        c->switches++;
+        install(c, POL_STATIC, c->chunk);
+        return 1;
+    }
+    if (c->trial >= 0) {                    /* auto: record the candidate, try the next one */
+        c->cand_rate[c->trial] = rate;
+        if (++c->trial < c->ncand) {
+            install(c, c->cand_pol[c->trial], c->cand_chunk[c->trial]);
+        } else {
+            int best = 0;
+            for (int j = 1; j < c->ncand; j++) if (c->cand_rate[j] > c->cand_rate[best]) best = j;
+            c->trial = -1; c->chosen = best; c->trials++;
+            install(c, c->cand_pol[best], c->cand_chunk[best]);
+        }
+    }
+    return 0;
+}
+
+const char *ctl_balanced_name(balanced_t b)
+{
+    switch (b) {
+    case BAL_DYNAMIC: return "dynamic";
+    case BAL_GUIDED:  return "guided";
+    default:          return "auto";
+    }
 }

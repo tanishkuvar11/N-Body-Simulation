@@ -4,11 +4,19 @@
  * index range [lo,hi).  Cells are split by binary-searching the next 3 key bits.
  * Chains of single-child cells are collapsed (the tight cell is kept), so every
  * internal node has >= 2 children and the tree has at most 2N-1 nodes.
+ *
+ * Parallel build: subtrees with more than TASK_MIN bodies are built as OpenMP tasks.
+ * Node slots are claimed with an atomic counter, so the node *layout* depends on task
+ * timing, but every node's contents (range, size, centre of mass summed over children in
+ * Morton order) and the child order the walk follows do not: forces stay bit-identical.
  */
 #include "nbody.h"
 
 #include <math.h>
+#include <omp.h>
 #include <stdlib.h>
+
+#define TASK_MIN 4096      /* bodies; smaller subtrees are built by the thread that reached them */
 
 int tree_init(tree_t *t, int n, int leafcap)
 {
@@ -66,8 +74,9 @@ static void build_node(tree_t *t, const bodies_t *b, int slot, int lo, int hi, i
     }
 
     node_t *nd = &t->nodes[slot];
-    const int c0 = t->count;
-    t->count += nonempty;
+    int c0;
+    #pragma omp atomic capture
+    { c0 = t->count; t->count += nonempty; }
     nd->child0 = c0; nd->nchild = nonempty; nd->lo = lo; nd->hi = hi;
     {
         double size = b->bside / (double)(1u << level);
@@ -75,8 +84,17 @@ static void build_node(tree_t *t, const bodies_t *b, int slot, int lo, int hi, i
     }
 
     int c = 0;
-    for (int o = 0; o < 8; o++)
-        if (bnd[o + 1] > bnd[o]) build_node(t, b, c0 + c++, bnd[o], bnd[o + 1], level + 1);
+    for (int o = 0; o < 8; o++) {
+        if (bnd[o + 1] <= bnd[o]) continue;
+        const int cs = c0 + c++, clo = bnd[o], chi = bnd[o + 1];
+        if (chi - clo > TASK_MIN) {
+            #pragma omp task firstprivate(cs, clo, chi, level)
+            build_node(t, b, cs, clo, chi, level + 1);
+        } else {
+            build_node(t, b, cs, clo, chi, level + 1);
+        }
+    }
+    #pragma omp taskwait
 
     /* centre of mass from children (re-fetch: nodes[] does not move, but be explicit) */
     nd = &t->nodes[slot];
@@ -91,5 +109,7 @@ static void build_node(tree_t *t, const bodies_t *b, int slot, int lo, int hi, i
 void tree_build(tree_t *t, const bodies_t *b)
 {
     t->count = 1;
+    #pragma omp parallel if (b->n >= PAR_MIN)
+    #pragma omp single
     build_node(t, b, 0, 0, b->n, 0);
 }

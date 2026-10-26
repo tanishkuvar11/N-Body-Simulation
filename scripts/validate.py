@@ -10,9 +10,14 @@
   V6  leapfrog is second order: energy error ~ dt^2
   V7  Plummer initial conditions are in virial equilibrium (2KE/|W| ~ 1)
 
-Writes results/validation.md and exits non-zero if any check fails.
-Usage: python scripts/validate.py
+V1 also covers the extensions: cost-weighted MPI partitioning (--partition cost), the
+controller's auto mode (--balanced auto); V1b the parallel sort / tree build (N >= PAR_MIN).
+
+Writes results/validation.md (or --out FILE) and exits non-zero if any check fails.
+GPU checks are reported as SKIP when no CUDA GPU is available.
+Usage: python scripts/validate.py [--out FILE]
 """
+import argparse
 import os
 import re
 import sys
@@ -25,11 +30,12 @@ fails = 0
 
 
 def report(name, ok, detail):
+    """ok: True = PASS, False = FAIL, None = SKIP (not counted as a failure)."""
     global fails
-    fails += 0 if ok else 1
-    s = f"| {name} | {'PASS' if ok else '**FAIL**'} | {detail} |"
-    lines.append(s)
-    print(("PASS " if ok else "FAIL ") + name + " - " + detail, flush=True)
+    fails += 1 if ok is False else 0
+    tag = {True: "PASS", False: "**FAIL**", None: "SKIP"}[ok]
+    lines.append(f"| {name} | {tag} | {detail} |")
+    print(tag.strip("*") + " " + name + " - " + detail, flush=True)
 
 
 def f(res, key):
@@ -37,6 +43,9 @@ def f(res, key):
 
 
 def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--out", default=os.path.join(RESULTS, "validation.md"))
+    out_path = ap.parse_args().out
     q = ["--quiet"]
 
     # V1 reproducibility --------------------------------------------------------------
@@ -44,19 +53,29 @@ def main():
     configs = [(1, 1, "static", []), (1, 4, "static", []), (1, 8, "dynamic", []), (1, 3, "guided", []),
                (1, 6, "adaptive", ["--k", 1, "--low", 0.0001, "--high", 0.0002]),   # forces switching
                (1, 8, "adaptive", ["--pin"])]
+    configs += [(1, 5, "adaptive", ["--balanced", "auto", "--k", 1, "--low", 0.0001, "--high", 0.0002])]
     if MPIEXEC:
         configs += [(2, 3, "adaptive", []), (3, 2, "dynamic", []), (4, 2, "static", ["--pin"]),
-                    (4, 1, "guided", [])]
+                    (4, 1, "guided", []),
+                    (4, 2, "adaptive", ["--partition", "cost", "--balanced", "auto"]),
+                    (3, 3, "static", ["--partition", "cost"])]
     sums, sw = {}, 0
     for p, t, s, extra in configs:
         r, _ = run_sim(base + ["--threads", t, "--sched", s] + extra, ranks=p)
         sums[f"P{p}T{t}-{s}"] = r["checksum"]
-        if s == "adaptive" and extra and extra[0] == "--k":
+        if s == "adaptive" and "--high" in extra and "--balanced" not in extra:
             sw = int(r["switches"])
     ok = len(set(sums.values())) == 1
     report("V1 reproducibility (bitwise)", ok,
            f"{len(sums)} configs (1-4 ranks, 1-8 threads, all schedules, forced controller switching: "
-           f"{sw} switches) -> {len(set(sums.values()))} distinct checksum(s) `{next(iter(sums.values()))}`")
+           f"{sw} switches; --balanced auto; --partition cost) -> {len(set(sums.values()))} distinct "
+           f"checksum(s) `{next(iter(sums.values()))}`")
+
+    # V1b parallel sort + tree build: same state for any thread count above PAR_MIN ---------------
+    big = ["--ic", "collapse", "--n", 70000, "--steps", 10, "--no-energy"] + q
+    cs = {t: run_sim(big + ["--threads", t])[0]["checksum"] for t in (1, 3, 8)}
+    report("V1b parallel Morton sort + tree build (N = 70000)", len(set(cs.values())) == 1,
+           ", ".join(f"{t} threads `{c}`" for t, c in cs.items()))
 
     # V2 GPU direct --------------------------------------------------------------------
     gpu_ok = True
@@ -68,10 +87,15 @@ def main():
                f"float: rms {f(rf, 'verify_rms'):.2e}, max {f(rf, 'verify_max'):.2e}")
     except Exception as e:
         gpu_ok = False
-        report("V2 CUDA tiled direct kernel vs CPU direct", False, f"GPU unavailable: {str(e).splitlines()[0][:120]}")
+        msg = str(e)
+        unavailable = "GPU init failed" in msg
+        report("V2 CUDA tiled direct kernel vs CPU direct", None if unavailable else False,
+               "no CUDA GPU / NVRTC on this machine" if unavailable else f"error: {msg.splitlines()[0][:120]}")
 
     # V3 hybrid == CPU BH ----------------------------------------------------------------
-    if gpu_ok:
+    if not gpu_ok:
+        report("V3 BH+GPU hybrid vs CPU Barnes-Hut", None, "no CUDA GPU / NVRTC on this machine")
+    else:
         args = ["--ic", "plummer", "--n", 16384, "--steps", 0, "--verify", "--no-energy", "--threads", 8] + q
         res = {}
         for leaf in (8, 64):
@@ -122,12 +146,13 @@ def main():
     qv = float(m.group(1)) if m else -1
     report("V7 Plummer IC virial ratio", 0.95 < qv < 1.05, f"2KE/|W| = {qv:.4f}")
 
-    os.makedirs(RESULTS, exist_ok=True)
-    with open(os.path.join(RESULTS, "validation.md"), "w") as fh:
+    os.makedirs(os.path.dirname(os.path.abspath(out_path)), exist_ok=True)
+    with open(out_path, "w") as fh:
         fh.write("# Validation results\n\nGenerated by `python scripts/validate.py`.\n\n")
         fh.write("| Check | Result | Details |\n|---|---|---|\n")
         fh.write("\n".join(lines) + "\n")
-    print(f"\n{len(lines) - fails}/{len(lines)} checks passed -> results/validation.md")
+    skipped = sum("| SKIP |" in ln for ln in lines)
+    print(f"\n{len(lines) - fails - skipped}/{len(lines) - skipped} checks passed ({skipped} skipped) -> {out_path}")
     sys.exit(1 if fails else 0)
 
 

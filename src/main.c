@@ -9,6 +9,10 @@
  *   5. compute forces for the own block   (OpenMP schedule(runtime) [+ CUDA])
  *   6. second half-kick of the own block
  *   7. adaptive controller: measure per-thread loop times, maybe switch schedule
+ *
+ * With --partition cost the rank blocks are not equal body counts: after the sort, the
+ * Morton order is cut into nranks pieces of equal summed work (each body's cost from the
+ * previous step, all-gathered after the force phase), i.e. Singh et al.'s cost zones.
  */
 #include "nbody.h"
 #include "gpu.h"
@@ -31,6 +35,7 @@ typedef struct {
     int diag, print, verify, energy, gpu_float, near_cap, quiet, pin;
     char cpus[256];
     char balanced[16];
+    char partition[16];
     char snap[512];
     int snap_every;
     unsigned long long seed;
@@ -57,7 +62,9 @@ static void usage(void)
 "  --chunk C                               dynamic/guided chunk      (8)\n"
 "  --k K                                   controller interval       (5)\n"
 "  --low L --high H                        controller thresholds     (0.05, 0.15)\n"
-"  --balanced dynamic|guided               adaptive: schedule used when imbalanced (dynamic)\n"
+"  --balanced dynamic|guided|auto          adaptive: schedule used when imbalanced (dynamic);\n"
+"                                          auto tries dynamic(C), dynamic(8C), guided(C), keeps the fastest\n"
+"  --partition equal|cost                  MPI rank blocks: equal body counts or equal work (equal)\n"
 "  --diag D                                energy check every D steps (0 = start/end only)\n"
 "  --no-energy                             skip all energy/momentum checks\n"
 "  --verify                                compare initial forces with direct summation\n"
@@ -91,6 +98,7 @@ static int parse(int argc, char **argv, cfg_t *c)
     c->diag = 0; c->print = 10; c->energy = 1; c->near_cap = 128; c->seed = 12345ULL;
     strcpy(c->label, "run");
     strcpy(c->balanced, "dynamic");
+    strcpy(c->partition, "equal");
     c->snap_every = 5;
 
     for (int i = 1; i < argc; i++) {
@@ -104,6 +112,7 @@ static int parse(int argc, char **argv, cfg_t *c)
         else if (!strcmp(a, "--quiet"))     c->quiet = 1;
         else if (!strcmp(a, "--pin"))       c->pin = 1;
         else if (!strcmp(a, "--balanced")){ NEEDV(); snprintf(c->balanced, sizeof c->balanced, "%s", v); }
+        else if (!strcmp(a, "--partition")){ NEEDV(); snprintf(c->partition, sizeof c->partition, "%s", v); }
         else if (!strcmp(a, "--snap"))    { NEEDV(); snprintf(c->snap, sizeof c->snap, "%s", v); }
         else if (!strcmp(a, "--snap-every")) { NEEDV(); c->snap_every = atoi(v); }
         else if (!strcmp(a, "--cpus"))    { NEEDV(); snprintf(c->cpus, sizeof c->cpus, "%s", v); c->pin = 1; }
@@ -142,6 +151,11 @@ static void sync_state(sim_t *s, const int *cnts, const int *disp)
     double *arr[6] = { s->b.x, s->b.y, s->b.z, s->b.vx, s->b.vy, s->b.vz };
     for (int k = 0; k < 6; k++)
         MPI_Allgatherv(MPI_IN_PLACE, 0, MPI_DATATYPE_NULL, arr[k], cnts, disp, MPI_DOUBLE, MPI_COMM_WORLD);
+}
+
+static void gather_cost(sim_t *s, const int *cnts, const int *disp)
+{
+    MPI_Allgatherv(MPI_IN_PLACE, 0, MPI_DATATYPE_NULL, s->b.cost, cnts, disp, MPI_DOUBLE, MPI_COMM_WORLD);
 }
 
 /* total energy and |P| (collective) */
@@ -250,8 +264,13 @@ int main(int argc, char **argv)
     if (cfg.chunk < 1) die("--chunk must be >= 1");
     if (cfg.k < 1) die("--k must be >= 1");
     if (!(cfg.low < cfg.high)) die("--low must be smaller than --high");
-    if (strcmp(cfg.balanced, "dynamic") && strcmp(cfg.balanced, "guided")) die("--balanced must be dynamic or guided");
-    const policy_t balanced = strcmp(cfg.balanced, "guided") ? POL_DYNAMIC : POL_GUIDED;
+    balanced_t balanced = BAL_DYNAMIC;
+    if      (!strcmp(cfg.balanced, "dynamic")) balanced = BAL_DYNAMIC;
+    else if (!strcmp(cfg.balanced, "guided"))  balanced = BAL_GUIDED;
+    else if (!strcmp(cfg.balanced, "auto"))    balanced = BAL_AUTO;
+    else die("--balanced must be dynamic, guided or auto");
+    if (strcmp(cfg.partition, "equal") && strcmp(cfg.partition, "cost")) die("--partition must be equal or cost");
+    const int part_cost = !strcmp(cfg.partition, "cost") && nranks > 1;
 
     omp_set_dynamic(0);
     omp_set_num_threads(cfg.threads);
@@ -272,6 +291,7 @@ int main(int argc, char **argv)
     s.theta = cfg.theta; s.theta2 = cfg.theta * cfg.theta;
     s.dt = cfg.dt; s.leafcap = cfg.leafcap; s.mode = mode; s.threads = cfg.threads;
     s.near_cap = cfg.near_cap;
+    s.max_own = part_cost ? cfg.n - (nranks - 1) : s.hi - s.lo;
 
     int *cnts = (int *)malloc(sizeof(int) * (size_t)nranks);
     int *disp = (int *)malloc(sizeof(int) * (size_t)nranks);
@@ -282,6 +302,7 @@ int main(int argc, char **argv)
 
     if (bodies_alloc(&s.b, cfg.n)) die("out of memory (bodies)");
     if (ic_generate(&s.b, cfg.ic, cfg.n, cfg.seed)) die("--ic must be uniform, plummer, collide, collapse or virial");
+    s.b.sort_cost = part_cost;
     if (tree_init(&s.tree, cfg.n, cfg.leafcap)) die("out of memory (tree)");
 
     /* GPU init is per rank; make failure collective so no rank hangs */
@@ -296,8 +317,9 @@ int main(int argc, char **argv)
         printf("== Hybrid MPI+OpenMP+CUDA Barnes-Hut N-body ==\n");
         printf("ic=%s n=%d steps=%d dt=%g eps=%g theta=%g leaf=%d\n",
                cfg.ic, cfg.n, cfg.steps, cfg.dt, cfg.eps, cfg.theta, cfg.leafcap);
-        printf("force=%s sched=%s balanced=%s chunk=%d k=%d low=%g high=%g | ranks=%d threads/rank=%d\n",
-               cfg.force, cfg.sched, cfg.balanced, cfg.chunk, cfg.k, cfg.low, cfg.high, nranks, cfg.threads);
+        printf("force=%s sched=%s balanced=%s chunk=%d k=%d low=%g high=%g | ranks=%d threads/rank=%d partition=%s\n",
+               cfg.force, cfg.sched, cfg.balanced, cfg.chunk, cfg.k, cfg.low, cfg.high, nranks, cfg.threads,
+               cfg.partition);
         if (mode == FORCE_GPU_DIRECT || mode == FORCE_BH_GPU)
             printf("GPU: %s (%s precision)\n", gpu_name(), cfg.gpu_float ? "single" : "double");
         fflush(stdout);
@@ -341,6 +363,7 @@ int main(int argc, char **argv)
         MPI_Allreduce(&rc, &any, 1, MPI_INT, MPI_LOR, MPI_COMM_WORLD);
         if (any) die("force computation failed");
     }
+    if (part_cost) gather_cost(&s, cnts, disp);
     rec_lt[0] = imbalance_of(s.thr_time, s.nthr);
     rec_le[0] = static_equiv_imbalance(b->cost, s.lo, s.hi, s.nthr);
     rec_lp[0] = inst_pred(&s);
@@ -402,8 +425,12 @@ int main(int argc, char **argv)
         sync_state(&s, cnts, disp);
         t1 = wtime(); t_comm += t1 - t0; t0 = t1;
 
-        /* 3. Morton sort */
+        /* 3. Morton sort (+ cost-zone repartition: identical on every rank, no communication) */
         morton_sort(b);
+        if (part_cost) {
+            partition_by_cost(b->cost, cfg.n, nranks, cnts, disp);
+            s.lo = disp[rank]; s.hi = disp[rank] + cnts[rank];
+        }
         t1 = wtime(); t_sort += t1 - t0; t0 = t1;
 
         /* 4. tree */
@@ -420,7 +447,10 @@ int main(int argc, char **argv)
         for (int i = s.lo; i < s.hi; i++) {
             b->vx[i] += hdt * b->ax[i]; b->vy[i] += hdt * b->ay[i]; b->vz[i] += hdt * b->az[i];
         }
-        t1 = wtime(); t_integ += t1 - t0;
+        t1 = wtime(); t_integ += t1 - t0; t0 = t1;
+
+        /* every rank needs every body's cost for the next repartition */
+        if (part_cost) { gather_cost(&s, cnts, disp); t_comm += wtime() - t0; }
 
         /* 7. controller */
         rec_lt[step] = imbalance_of(s.thr_time, s.nthr);
@@ -495,18 +525,23 @@ int main(int argc, char **argv)
                  "%s,%s,%d,%d,%g,%g,%g,%d,%s,%s,%d,%d,%g,%g,%d,%d,"
                  "%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,"
                  "%.5f,%.5f,%.5f,%.5f,%.5f,%d,%.4f,%d,%s,"
-                 "%.10e,%.10e,%.4e,%.4e,%.4e,%.4e,%.10e,%.10e,%lld,%016llx",
+                 "%.10e,%.10e,%.4e,%.4e,%.4e,%.4e,%.10e,%.10e,%lld,%016llx,"
+                 "%s,%s,%d,%s,%d",
                  cfg.label, cfg.ic, cfg.n, S, cfg.dt, cfg.eps, cfg.theta, cfg.leafcap, cfg.force, cfg.sched,
                  cfg.chunk, cfg.k, cfg.low, cfg.high, cfg.threads, nranks,
                  tg[0], t_step, tg[1], tg[2], tg[3], tg[4], tg[5], tg[6],
                  lt_mean, lt_max, le_mean, lp_mean, lr_mean, ctl.switches, fdyn, cfg.pin,
                  (mode == FORCE_GPU_DIRECT || mode == FORCE_BH_GPU) ? (cfg.gpu_float ? "float" : "double") : "none",
-                 E0, E1, de_rel, dEmax, P0, P1, ver_rms, ver_max, ovf_g, csum);
+                 E0, E1, de_rel, dEmax, P0, P1, ver_rms, ver_max, ovf_g, csum,
+                 cfg.balanced, cfg.partition, ctl.trials,
+                 ctl.chosen >= 0 ? ctl_policy_name(ctl.cand_pol[ctl.chosen]) : "none",
+                 ctl.chosen >= 0 ? ctl.cand_chunk[ctl.chosen] : 0);
         static const char *HEADER =
             "label,ic,n,steps,dt,eps,theta,leaf,force,sched,chunk,k,low,high,threads,ranks,"
             "t_total,t_step,t_force,t_gpu,t_build,t_sort,t_comm,t_integ,"
             "lam_time_mean,lam_time_max,lam_work_mean,lam_pred_mean,lam_rank_mean,switches,frac_dynamic,pinned,gpu_prec,"
-            "e0,e1,de_rel,de_rel_max,p0,p1,verify_rms,verify_max,near_overflow,checksum";
+            "e0,e1,de_rel,de_rel_max,p0,p1,verify_rms,verify_max,near_overflow,checksum,"
+            "balanced,partition,trials,chosen,chosen_chunk";
 
         if (!cfg.quiet) {
             printf("done: total %.4f s  (%.5f s/step)  force %.4f  gpu %.4f  build %.4f  sort %.4f  comm %.4f\n",
