@@ -21,3 +21,12 @@ Thumbs.db
 # personal notes and local tooling
 PROJECT_EXPLAINED.txt
 .claude/
+
+# presentation build artefacts
+presentation/node_modules/
+presentation/render/
+presentation/guide_render/
+presentation/zoom.png
+presentation/preview_stars.png
+presentation/fonttest.*
+presentation/embedded_tmp.pptx

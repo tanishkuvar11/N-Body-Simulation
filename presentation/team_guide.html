@@ -1,0 +1,345 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>PCAP Project: Team Guide</title>
+<style>
+  @font-face { font-family: "IBM Plex Sans"; src: url("fonts/IBMPlexSans-Regular.ttf") format("truetype"); font-weight: 400; font-style: normal; }
+  @font-face { font-family: "IBM Plex Sans"; src: url("fonts/IBMPlexSans-Italic.ttf") format("truetype"); font-weight: 400; font-style: italic; }
+  @font-face { font-family: "IBM Plex Sans"; src: url("fonts/IBMPlexSans-Bold.ttf") format("truetype"); font-weight: 700; font-style: normal; }
+  @font-face { font-family: "IBM Plex Sans"; src: url("fonts/IBMPlexSans-BoldItalic.ttf") format("truetype"); font-weight: 700; font-style: italic; }
+  @font-face { font-family: "IBM Plex Mono"; src: url("fonts/IBMPlexMono-Regular.ttf") format("truetype"); font-weight: 400; font-style: normal; }
+  @font-face { font-family: "IBM Plex Mono"; src: url("fonts/IBMPlexMono-Italic.ttf") format("truetype"); font-weight: 400; font-style: italic; }
+  @font-face { font-family: "IBM Plex Mono"; src: url("fonts/IBMPlexMono-Bold.ttf") format("truetype"); font-weight: 700; font-style: normal; }
+  @font-face { font-family: "IBM Plex Mono"; src: url("fonts/IBMPlexMono-BoldItalic.ttf") format("truetype"); font-weight: 700; font-style: italic; }
+  @page { size: A4; margin: 18mm 17mm 18mm 17mm; }
+  :root { --ink:#111111; --muted:#5f5c57; --rule:#d9d5cc; --acc:#D9472B; --paper:#ffffff; --tint:#f5f3ee; }
+  * { box-sizing: border-box; }
+  body { margin:0; color:var(--ink); background:var(--paper);
+         font: 10.5pt/1.55 "IBM Plex Sans", "Segoe UI", sans-serif; }
+  .mono, code { font-family: "IBM Plex Mono", Consolas, monospace; }
+  code { font-size: 9.5pt; background: var(--tint); padding: 0 3px; }
+  h1 { font-size: 26pt; line-height:1.15; margin: 0 0 6mm; }
+  h2 { font-size: 16pt; margin: 9mm 0 3mm; padding-top: 3mm; border-top: 1px solid var(--rule); break-after: avoid; }
+  h2 .n { color: var(--acc); font-family: "IBM Plex Mono", monospace; font-weight: 700; margin-right: 6px; }
+  h3 { font-size: 12pt; margin: 5mm 0 1.5mm; break-after: avoid; }
+  h2 + p, h2 + table, h2 + ol, h3 + p { break-before: avoid; }
+  p { margin: 0 0 2.5mm; }
+  ul, ol { margin: 0 0 3mm; padding-left: 5mm; }
+  li { margin: 0 0 1.2mm; }
+  .label { font-family:"IBM Plex Mono", monospace; font-size:8.5pt; letter-spacing:.12em; text-transform:uppercase; color:var(--acc); }
+  .lead { font-size: 12.5pt; color: var(--muted); }
+  .box { border-left: 3px solid var(--acc); background: var(--tint); padding: 3mm 4mm; margin: 3mm 0 4mm; break-inside: avoid; }
+  .plain { border-left-color: var(--ink); }
+  table { width:100%; border-collapse: collapse; margin: 2mm 0 4mm; font-size: 9.8pt; }
+  tr { break-inside: avoid; }
+  thead { display: table-header-group; }
+  th, td { text-align:left; vertical-align: top; padding: 1.6mm 2mm; border-bottom: 1px solid var(--rule); }
+  th { font-family:"IBM Plex Mono", monospace; font-size:8pt; letter-spacing:.08em; text-transform:uppercase; color: var(--muted); font-weight: 400; }
+  td.k { font-family:"IBM Plex Mono", monospace; white-space: nowrap; color: var(--acc); font-weight: 700; }
+  figure { margin: 3mm 0 5mm; break-inside: avoid; }
+  figure img { width: 100%; border: 1px solid var(--rule); }
+  figcaption { font-size: 9pt; color: var(--muted); margin-top: 1.5mm; }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 5mm; }
+  .stats { display:grid; grid-template-columns: repeat(4, 1fr); gap: 3mm; margin: 4mm 0; }
+  .stat { border-top: 2px solid var(--ink); padding-top: 2mm; }
+  .stat b { display:block; font: 700 20pt/1.1 "IBM Plex Mono", monospace; color: var(--acc); }
+  .stat span { font-size: 8.8pt; color: var(--muted); }
+  .cover { height: 255mm; display:flex; flex-direction:column; justify-content:space-between; page-break-after: always; }
+  .cover h1 { font-size: 32pt; margin-top: 18mm; }
+  .cover .who { font-family:"IBM Plex Mono", monospace; font-size: 10pt; line-height: 1.8; }
+  .pb { break-before: page; }
+  .qa { break-inside: avoid; margin: 0 0 3.5mm; }
+  .qa .q { font-weight: 700; }
+  .qa .q::before { content: "Q  "; font-family: "IBM Plex Mono", monospace; color: var(--acc); }
+  .qa .a { margin-left: 5.5mm; color: #222; }
+  .toc li { margin-bottom: 1mm; }
+  .flow { display:flex; flex-wrap: wrap; gap: 2mm; align-items:center; margin: 3mm 0 4mm; font-family:"IBM Plex Mono", monospace; font-size: 8.8pt; }
+  .flow span { border: 1px solid var(--ink); padding: 1.2mm 2.2mm; }
+  .flow span.hot { border-color: var(--acc); color: var(--acc); }
+  .flow i { font-style: normal; color: var(--muted); }
+</style>
+</head>
+<body>
+
+<!-- ============================================================ COVER -->
+<section class="cover">
+  <div>
+    <div class="label">PCAP course project · team guide</div>
+    <h1>Adaptive Scheduling for Load-Balanced Parallel N-Body Simulation</h1>
+    <p class="lead">What the project is, what we built, what we found, how to run the demo, and the questions we are likely to be asked in the viva. Written so that anyone in the team can explain it.</p>
+  </div>
+  <img src="img/stars_static.png" style="width:110mm; align-self:flex-end; border:none" alt="Collapsed star cloud; the busiest thread's stars in vermilion">
+  <div class="who">
+    Tanish Hemant Kuvar · 240962540<br>
+    M. Vishal Kumar · 240962546<br>
+    Samyak Jain · 240962638<br>
+    AIML-A · Parallel Computing Architecture and Programming<br>
+    Code and results: github.com/tanishkuvar11/N-Body-Simulation
+  </div>
+</section>
+
+<!-- ============================================================ CONTENTS -->
+<h2 style="border-top:none; margin-top:0"><span class="n">00</span>Contents</h2>
+<ol class="toc">
+  <li>The project in one minute</li>
+  <li>The problem, explained with an analogy</li>
+  <li>The words you need</li>
+  <li>What we built</li>
+  <li>The adaptive controller, our main idea</li>
+  <li>How we know it is correct</li>
+  <li>Experiments and results</li>
+  <li>Honest findings and limitations</li>
+  <li>Running the demo</li>
+  <li>Viva questions and answers</li>
+  <li>One-page cheat sheet of numbers</li>
+</ol>
+
+<!-- ============================================================ 1 -->
+<h2><span class="n">01</span>The project in one minute</h2>
+<p>We wrote a program that simulates thousands of stars moving under gravity. Every time step it must work out how hard every star pulls on every other star. That is a lot of work, so we split it across:</p>
+<ul>
+  <li><b>MPI</b>: several separate programs ("ranks"), the way you would use several computers;</li>
+  <li><b>OpenMP</b>: the 8 fast cores ("threads") inside one program;</li>
+  <li><b>CUDA</b>: the graphics card (GPU).</li>
+</ul>
+<p>The twist: stars <b>clump together</b>. A star inside a clump is much more work to calculate, so if every thread gets the same <i>number</i> of stars, the thread that gets the clump falls behind and the others sit idle. We built a small <b>controller</b> that measures how long each thread takes and, when one is falling far behind, switches OpenMP to a smarter way of sharing the work.</p>
+<div class="box"><b>Result in one sentence.</b> The controller is faster than the simple equal-shares schedule on every clustered test (by 1.5–16.6 %) and costs almost nothing when there is no clustering; OpenMP's built-in <i>guided</i> schedule turned out to be just as good or better on our laptop, which we report honestly.</div>
+
+<!-- ============================================================ 2 -->
+<h2><span class="n">02</span>The problem, explained with an analogy</h2>
+<h3>What is computed</h3>
+<p>An <b>N-body simulation</b> moves N bodies (stars) forward in small time steps. In each step it (1) computes the gravitational force on every star from all the others, then (2) moves every star a little. Step (1) is the expensive part: done exactly, N stars give N(N−1)/2 pairs, about <b>2.1 billion pairs per step</b> for N = 65,536.</p>
+<h3>The shortcut: Barnes–Hut</h3>
+<p>A group of stars that is far away pulls on you almost exactly like one big star at the group's centre of mass. Barnes–Hut puts all stars into a tree of boxes (an <b>octree</b>: each box split into 8 smaller boxes). For each star we walk the tree; a far box counts as one star, a near box is opened. "Far enough" means <code>box size / distance &lt; θ</code>, with θ = 0.5. This cuts the work from N² to about N log N, with an average force error of only 0.25 %.</p>
+<h3>Where the imbalance comes from</h3>
+<div class="box plain"><b>Analogy: 8 teachers grading 65,536 papers.</b> Most papers are short; papers from crowded regions (stars inside a clump) are long. If the pile is cut into 8 equal stacks, and the stacks are sorted by location, one teacher gets all the long papers. The other seven finish early and wait. Everyone waits for the slowest. That waiting is what we want to remove.</div>
+<p>In our program the "stacks are sorted by location" because we sort stars along a <b>Morton (Z-order) curve</b> every step, a zig-zag path through space that keeps neighbouring stars next to each other in memory. That makes the code fast (good cache use, easy tree building), but it also means an equal block of stars is one <i>region of space</i>. When the region contains the clump, that thread has far more work.</p>
+<figure>
+  <div class="two">
+    <img src="img/stars_static.png" alt="Static schedule: busiest thread owns one block of the core">
+    <img src="img/stars_adaptive.png" alt="Adaptive: busiest thread's stars spread out">
+  </div>
+  <figcaption>Collapsed cloud, 32,768 stars, 8 threads. Vermilion = stars computed by the busiest thread. Left, static: one solid block inside the core (that thread took 3.7× longer than the least-loaded one). Right, after our controller switched to dynamic: its work is spread over the whole cloud.</figcaption>
+</figure>
+
+<!-- ============================================================ 3 -->
+<h2><span class="n">03</span>The words you need</h2>
+<table>
+  <tr><th>Word</th><th>Meaning in our project</th></tr>
+  <tr><td class="k">thread</td><td>One OpenMP worker; we use up to 8, one per fast CPU core.</td></tr>
+  <tr><td class="k">rank</td><td>One MPI program. "4 ranks" = 4 copies of the program cooperating by sending messages.</td></tr>
+  <tr><td class="k">OpenMP</td><td>Library that splits a loop across threads inside one program (shared memory).</td></tr>
+  <tr><td class="k">MPI</td><td>Library for separate programs that exchange data (distributed memory, clusters).</td></tr>
+  <tr><td class="k">CUDA</td><td>NVIDIA's way to run code on the graphics card. A function that runs there is a <i>kernel</i>.</td></tr>
+  <tr><td class="k">schedule</td><td>How OpenMP shares loop iterations among threads.</td></tr>
+  <tr><td class="k">static</td><td>Equal fixed blocks, decided up front. No overhead, but cannot react to uneven work.</td></tr>
+  <tr><td class="k">dynamic</td><td>Threads grab small chunks (we use 8 stars) whenever they are free. Balances work, small overhead, worse cache locality.</td></tr>
+  <tr><td class="k">guided</td><td>Like dynamic but chunks start large and shrink. Low overhead early, balance at the end.</td></tr>
+  <tr><td class="k">adaptive</td><td>Our controller: starts static, switches to dynamic when imbalance is high, back when it is low.</td></tr>
+  <tr><td class="k">λ (lambda)</td><td>Imbalance = slowest thread's time / average time − 1. 0 = perfect; 0.5 = slowest took 50 % longer.</td></tr>
+  <tr><td class="k">hysteresis</td><td>Two different thresholds (switch up above 0.15, back below 0.05) so the controller does not flip back and forth on noise.</td></tr>
+  <tr><td class="k">Barnes–Hut, θ</td><td>The tree shortcut; θ = 0.5 decides when a box is far enough to count as one star.</td></tr>
+  <tr><td class="k">softening ε</td><td>Small number (0.05) added to distances so two very close stars do not produce an infinite force.</td></tr>
+  <tr><td class="k">leapfrog</td><td>The time-stepping method ("kick–drift–kick"). Simple, second-order accurate, conserves energy well.</td></tr>
+  <tr><td class="k">Morton order</td><td>Sorting stars along a Z-shaped space-filling curve so nearby stars are nearby in memory.</td></tr>
+  <tr><td class="k">speed-up S(p)</td><td>T(1) / T(p): how many times faster with p threads than with 1.</td></tr>
+  <tr><td class="k">efficiency E(p)</td><td>S(p) / p. 100 % = perfect use of all threads.</td></tr>
+  <tr><td class="k">checksum</td><td>A fingerprint of the final star positions. Same checksum = bit-identical result.</td></tr>
+  <tr><td class="k">pinning</td><td>Tying each thread to one specific CPU core.</td></tr>
+  <tr><td class="k">P-core / E-core</td><td>Fast and slow cores of our Intel hybrid CPU (8 P + 12 E).</td></tr>
+  <tr><td class="k">fp32 / fp64</td><td>Single / double precision numbers. Our laptop GPU is 64× slower in fp64.</td></tr>
+  <tr><td class="k">NVRTC</td><td>NVIDIA's run-time compiler: our CUDA code is compiled while the program runs.</td></tr>
+</table>
+
+<!-- ============================================================ 4 -->
+<h2><span class="n">04</span>What we built</h2>
+<h3>One time step, in order</h3>
+<div class="flow"><span>kick + drift</span><i>→</i><span>MPI_Allgatherv</span><i>→</i><span>Morton sort</span><i>→</i><span>octree build</span><i>→</i><span class="hot">force loop</span><i>→</i><span>kick</span><i>→</i><span class="hot">controller</span></div>
+<ol>
+  <li><b>Kick + drift</b>: update velocities by half a step and positions by a full step (only for this rank's own stars).</li>
+  <li><b>MPI_Allgatherv</b>: every rank sends its stars' new positions and velocities to every other rank, so all ranks have the full picture.</li>
+  <li><b>Morton sort</b>: all stars are re-sorted along the Z-curve (identically on every rank).</li>
+  <li><b>Octree build</b>: the Barnes–Hut tree is built (every rank builds the same tree).</li>
+  <li><b>Force loop</b>: the threads compute forces for this rank's stars. The loop uses <code>schedule(runtime)</code>, so the schedule can be changed while the program runs.</li>
+  <li><b>Kick</b>: the second half of the velocity update.</li>
+  <li><b>Controller</b>: every 5 steps it looks at the thread times and maybe calls <code>omp_set_schedule()</code>.</li>
+</ol>
+<h3>The three levels of parallelism</h3>
+<table>
+  <tr><th>Level</th><th>What is split</th><th>How</th></tr>
+  <tr><td class="k">MPI</td><td>Stars between ranks (1–4)</td><td>Each rank owns one contiguous Morton block; positions exchanged every step with <code>MPI_Allgatherv</code>.</td></tr>
+  <tr><td class="k">OpenMP</td><td>Stars between threads (1–8)</td><td><code>#pragma omp for schedule(runtime)</code>; the controller picks the schedule.</td></tr>
+  <tr><td class="k">CUDA</td><td>Force arithmetic</td><td>(a) Tiled all-pairs kernel: each GPU thread handles one star, 256 stars are loaded at a time into fast shared memory. (b) Hybrid: the CPU walks the tree, the GPU computes the close-range pairs.</td></tr>
+</table>
+<h3>Things worth knowing about the implementation</h3>
+<ul>
+  <li><b>Bit-identical results.</b> Every star's force is computed with exactly the same sequence of operations, whichever thread or rank does it, and every rank sorts and builds the same tree. So 1 thread, 8 threads, 4 ranks, static or adaptive all give the same final positions, to the last bit.</li>
+  <li><b>No race conditions.</b> In the force loop each thread only writes the forces of its own stars; nothing is shared and written at the same time.</li>
+  <li><b>CUDA without Visual Studio.</b> The usual CUDA compiler (nvcc) needs Microsoft's C++ compiler on Windows, which the laptop did not have, so kernels are compiled at run time with NVRTC and launched through the CUDA Driver API.</li>
+  <li><b>Accurate timing.</b> MinGW's <code>omp_get_wtime()</code> only measures in 1 ms steps, too coarse for per-thread times, so we use the Windows high-resolution clock (QueryPerformanceCounter).</li>
+  <li><b>Vishal's additions</b>: a parallel sort and tree build for large N, <code>--partition cost</code> (split stars between ranks by measured work, not count), <code>--balanced auto</code> (controller tries dynamic, larger-chunk dynamic and guided, keeps the fastest), a disk-galaxy input and an interactive 3D viewer.</li>
+</ul>
+
+<!-- ============================================================ 5 -->
+<h2><span class="n">05</span>The adaptive controller, our main idea</h2>
+<ol>
+  <li>Time each thread's share of the force loop.</li>
+  <li>Add the times up over a window of <b>k = 5 steps</b> (one step alone is too noisy).</li>
+  <li>Compute <b>λ = max(t<sub>i</sub>) / mean(t<sub>i</sub>) − 1</b>.</li>
+  <li>If using static and λ &gt; <b>0.15</b> → switch to dynamic (chunks of 8). If using dynamic and λ &lt; <b>0.05</b> → switch back to static.</li>
+  <li>Apply it with <code>omp_set_schedule(policy, chunk)</code>; the next force loop uses it.</li>
+</ol>
+<div class="box"><b>Our correction to the synopsis's Algorithm 1.</b> Under dynamic, threads keep grabbing work until it is gone, so they all finish at the same moment <i>by construction</i>. The measured λ is then always near 0, the rule "λ &lt; 0.05 → back to static" fires at once, static is unbalanced again, and the controller would flip back and forth forever.<br><br>
+Fix: while dynamic is on, the controller <b>predicts</b> how long each thread would take under static:
+<span class="mono">T<sub>i</sub> = B<sub>i</sub> / v<sub>i</sub>,  v<sub>i</sub> = W<sub>i</sub> / t<sub>i</sub></span>,
+where B<sub>i</sub> is the work in thread i's static block (we count tree nodes visited plus interactions per star), W<sub>i</sub> is the work the thread actually did and t<sub>i</sub> its measured time, so v<sub>i</sub> is its speed. Under static, W<sub>i</sub> = B<sub>i</sub>, so T<sub>i</sub> = t<sub>i</sub> exactly: the same metric as the synopsis.</div>
+<p>Two other practical additions: <b>thread pinning</b> (<code>--pin</code>), because unpinned threads that land on slow E-cores made a perfectly balanced job look 30 % imbalanced; and a new test input, <b>cold collapse</b>, that starts uniform and clumps during the run, which is exactly the case a run-time controller is for.</p>
+
+<!-- ============================================================ 6 -->
+<h2><span class="n">06</span>How we know it is correct</h2>
+<p><code>python scripts/validate.py</code> runs 8 automatic checks; all pass.</p>
+<table>
+  <tr><th>Check</th><th>What it shows</th><th>Result</th></tr>
+  <tr><td class="k">V1</td><td>Same final state for every schedule, thread count (1–8) and rank count (1–4), including forced controller switching</td><td>1 checksum across 13 configurations</td></tr>
+  <tr><td class="k">V1b</td><td>Vishal's parallel sort and tree build change nothing</td><td>identical for 1, 3, 8 threads</td></tr>
+  <tr><td class="k">V2</td><td>GPU direct kernel matches the CPU</td><td>rms error 1.8 × 10<sup>−16</sup> (fp64), 1.6 × 10<sup>−6</sup> (fp32)</td></tr>
+  <tr><td class="k">V3</td><td>CPU + GPU hybrid gives the same forces as the CPU tree code</td><td>identical to 7 digits</td></tr>
+  <tr><td class="k">V4</td><td>Barnes–Hut error grows with θ as expected</td><td>0.05 / 0.25 / 0.62 / 1.16 % for θ = 0.3 / 0.5 / 0.7 / 0.9</td></tr>
+  <tr><td class="k">V5</td><td>Energy and momentum are conserved</td><td>energy drift 1.1 × 10<sup>−7</sup> (direct), 1.4 × 10<sup>−5</sup> (Barnes–Hut)</td></tr>
+  <tr><td class="k">V6</td><td>Leapfrog is second order: halving dt cuts the error 4×</td><td>measured 4.05× and 4.02×</td></tr>
+  <tr><td class="k">V7</td><td>The Plummer star cluster starts in equilibrium</td><td>virial ratio 0.986 (ideal 1)</td></tr>
+</table>
+
+<!-- ============================================================ 7 -->
+<h2><span class="n">07</span>Experiments and results</h2>
+<p><b>Setup.</b> Intel i7-14700HX (8 P-cores + 12 E-cores), RTX 4060 Laptop GPU, Windows 11, GCC 15.1 <code>-O3 -march=native</code>, MS-MPI 10.1. Four inputs (uniform as the balanced control, Plummer, colliding clusters, cold collapse); N = 4,096, 16,384, 65,536; 150 steps; 1–8 threads, 1–4 ranks. Every run repeated 3 times in shuffled order; we report the median. A "thermal gate" made later experiments wait until the laptop had cooled down.</p>
+<div class="stats">
+  <div class="stat"><b>5.6–6.4×</b><span>speed-up with 8 threads (N = 65,536)</span></div>
+  <div class="stat"><b>9/9</b><span>clustered cases where adaptive beats static</span></div>
+  <div class="stat"><b>≤ 2.3 %</b><span>adaptive vs static on the uniform input</span></div>
+  <div class="stat"><b>88×</b><span>GPU fp32 vs 8 CPU threads, exact sum</span></div>
+</div>
+<figure>
+  <img src="../results/figures/imbalance_traces.png" alt="Imbalance over time for the four inputs">
+  <figcaption><b>Imbalance over time</b> (N = 65,536, 8 threads). Top: λ during the run. In the cold collapse (right) the work imbalance stays below 0.05 until t = 1.00 and then rises to 0.64 as the core forms. Orange diamonds are the controller's checks; shaded areas (bottom) are where the adaptive run used dynamic. It switched briefly at t = 0.41 on a timing spike (reverted by the 0.05 threshold) and for good at t = 1.16.</figcaption>
+</figure>
+<figure>
+  <img src="../results/figures/relative_to_static.png" alt="Run time relative to static">
+  <figcaption><b>Who wins</b> at 8 threads: run time relative to static (below 1 = faster). On clumpy inputs every balancing schedule beats static. Guided (green) is usually best; adaptive (yellow) beats static in all 9 clustered cases. Note the tall orange bar: dynamic is 46 % slower than static on the small uniform job, and adaptive avoids that by staying on static.</figcaption>
+</figure>
+<figure>
+  <img src="../results/figures/speedup_n65536.png" alt="Speed-up and efficiency">
+  <figcaption><b>Speed-up</b> (top) and efficiency (bottom) versus threads, N = 65,536. About 6× with 8 threads, i.e. 70–80 % efficiency. On clustered inputs static (blue) falls lowest.</figcaption>
+</figure>
+<figure>
+  <img src="../results/figures/gpu.png" alt="GPU vs CPU">
+  <figcaption><b>GPU.</b> Left: exact all-pairs force. The fp32 GPU kernel takes 24 ms per step at N = 65,536 against 2,117 ms for 8 CPU threads (88×), with 4.6 × 10<sup>−6</sup> error. Right: Barnes–Hut; the CPU + GPU hybrid with 256-star leaves is 1.3–1.4× faster than the CPU alone.</figcaption>
+</figure>
+<figure>
+  <img src="../results/figures/mpi_hybrid.png" alt="MPI ranks x threads">
+  <figcaption><b>MPI.</b> The same job split as ranks × threads (all give the same result). On one laptop, 1 rank × 8 threads is the fastest way to use 8 cores, because each extra rank repeats the sort and tree build and must exchange data. With 16 hardware threads we reach about 7×.</figcaption>
+</figure>
+
+<!-- ============================================================ 8 -->
+<h2><span class="n">08</span>Honest findings and limitations</h2>
+<ul>
+  <li><b>Guided was the best fixed schedule</b> in 9 of 12 cases at 8 threads; adaptive won the other 3. Adaptive spends the early, balanced part of every run in static before it notices the clump, and guided's big first chunks keep neighbouring stars together (good for the cache) while its small last chunks fix the imbalance.</li>
+  <li><b>A timing spike can cause a false switch.</b> In the MPI experiment (uniform input, 1 rank × 8 threads) adaptive switched to dynamic on noise and was 17 % slower than static. Any time-based trigger has this risk on a noisy laptop.</li>
+  <li><b>Imbalance between ranks</b> reached λ = 0.11; our OpenMP controller only balances threads inside a rank. Vishal's <code>--partition cost</code> addresses this: up to 17.2 % faster with 4 ranks on colliding clusters (measured on his Ryzen 7 7730U).</li>
+  <li><b>One machine only.</b> "MPI across nodes" was tested with ranks on one laptop, where ranks cost more than threads. On a real cluster the trade-off would be different.</li>
+  <li><b>Laptop measurements are noisy</b>: hybrid P/E cores, heat, turbo boost. We handled this with pinning, 3 shuffled repetitions with medians, and the thermal gate; throttled data was discarded and kept in <code>results/archive/</code> for transparency.</li>
+</ul>
+<div class="box"><b>How to say the conclusion.</b> "Our controller reliably beats static scheduling when stars clump and costs almost nothing when they don't, as the synopsis predicted. On this hardware the built-in guided schedule is equally good, so the controller's value is that you never have to choose a schedule by hand."</div>
+
+<!-- ============================================================ 9 -->
+<h2><span class="n">09</span>Running the demo</h2>
+<p>Open <b>Anaconda Prompt</b>, then:</p>
+<p><code>cd "E:\BTech 3rd Year (Sem 5)\PCAP-Project"</code><br><code>python demo.py</code></p>
+<table>
+  <tr><th>Part</th><th>What it shows</th><th>What to say</th></tr>
+  <tr><td class="k">1</td><td>Force error 0.25 %; same fingerprint for 1 thread, 8 threads, adaptive</td><td>"Splitting the work never changes the answer."</td></tr>
+  <tr><td class="k">2</td><td>Collapsing cloud, static vs adaptive; # bars show λ growing, "manager switched"</td><td>"Static can't react to the clump; the controller switches."</td></tr>
+  <tr><td class="k">3</td><td>1 rank × 8 threads vs 4 ranks × 2 threads, same fingerprint</td><td>"This is how it would run on a cluster."</td></tr>
+  <tr><td class="k">4</td><td>GPU exact sum and the CPU + GPU hybrid</td><td>"The graphics card does the repetitive maths."</td></tr>
+  <tr><td class="k">5</td><td>Opens <code>results/presentation.html</code>: video + graphs</td><td>Walk through the animation.</td></tr>
+</table>
+<p>Options: <code>--part N</code> runs one part, <code>--no-pause</code> runs straight through, <code>--details</code> shows the raw program output. If anything fails live, open <code>results/presentation.html</code> directly; it works offline. Vishal's 3D viewer (<code>results/web/viewer.html</code>) needs internet.</p>
+<p>First time on a new machine: <code>python -m pip install -r requirements.txt</code>, <code>python build.py --fetch-cuda</code>, then <code>python scripts/validate.py</code> should print 8/8 passed.</p>
+
+<!-- ============================================================ 10 -->
+<h2 class="pb"><span class="n">10</span>Viva questions and answers</h2>
+
+<h3>The basics</h3>
+<div class="qa"><div class="q">What is an N-body simulation?</div><div class="a">A simulation of N bodies that all interact, here by gravity. Time advances in small steps; each step computes the force on every body and then moves the bodies.</div></div>
+<div class="qa"><div class="q">Why is it computationally expensive?</div><div class="a">Every body interacts with every other: N(N−1)/2 pairs per step, about 2.1 × 10<sup>9</sup> at N = 65,536. The cost grows as N².</div></div>
+<div class="qa"><div class="q">What is Barnes–Hut and what does θ do?</div><div class="a">A tree method: bodies are put into an octree, and a distant box is treated as a single mass at its centre of mass. A box is used whole if size/distance &lt; θ. It reduces the cost to O(N log N). We use θ = 0.5, giving 0.25 % rms force error; smaller θ is more accurate but slower.</div></div>
+<div class="qa"><div class="q">What is softening?</div><div class="a">We add ε² (ε = 0.05) to the squared distance so that two bodies passing very close do not produce an infinite force.</div></div>
+<div class="qa"><div class="q">Which integrator did you use and why?</div><div class="a">Leapfrog (kick–drift–kick velocity Verlet). It is second-order accurate and symplectic, so energy stays well conserved over long runs. We verified the second order: halving dt cut the energy error by 4.05× and 4.02×.</div></div>
+
+<h3>Parallelism and OpenMP</h3>
+<div class="qa"><div class="q">What is load imbalance and how do you measure it?</div><div class="a">Some threads have more work than others, so the fast ones wait at the end of the loop. We measure λ = max(t<sub>i</sub>)/mean(t<sub>i</sub>) − 1 over the threads' loop times; 0 is perfect.</div></div>
+<div class="qa"><div class="q">Why does clustering cause imbalance in your code?</div><div class="a">A body in a dense region opens more tree nodes, so its force costs more. Because bodies are Morton-sorted, a static block is a region of space, so the thread whose block contains the clump gets most of the expensive bodies (3.7× the work of the lightest thread in our example).</div></div>
+<div class="qa"><div class="q">Explain static, dynamic and guided.</div><div class="a">Static: iterations divided into equal contiguous blocks up front, no run-time overhead. Dynamic: threads take chunks of c iterations from a shared counter when free, good balance but some overhead and worse locality. Guided: like dynamic, but chunks start large and shrink, combining low overhead with good balance at the end.</div></div>
+<div class="qa"><div class="q">How can you change the schedule while the program runs?</div><div class="a">The force loop is written with <code>schedule(runtime)</code>, which reads the schedule from an internal variable. <code>omp_set_schedule(kind, chunk)</code> sets that variable, and the next parallel loop uses it, with no recompilation.</div></div>
+<div class="qa"><div class="q">Why not always use dynamic?</div><div class="a">It has per-chunk overhead and loses cache locality. On the small balanced job (N = 4,096, uniform) dynamic was 46 % slower than static; chunk size 1 was also slower than static on clustered input. Adaptive uses static when that is the better choice.</div></div>
+<div class="qa"><div class="q">Why is the speed-up only about 6× with 8 threads?</div><div class="a">Some parts were sequential (the sort and tree build, about 8 % of a step; Amdahl's law limits the speed-up), the tree walk is limited by memory bandwidth, and laptop timing noise. Vishal later parallelised the sort and tree build (about 2× faster for those parts).</div></div>
+<div class="qa"><div class="q">Are there race conditions or false sharing?</div><div class="a">No races in the force loop: each thread writes only the accelerations of its own bodies. The per-thread times are written once per loop, and the per-body owner array is only filled when the animation snapshots are requested, to avoid false sharing in normal runs.</div></div>
+<div class="qa"><div class="q">Why do you pin threads?</div><div class="a">The i7-14700HX has fast P-cores and slow E-cores. Unpinned threads landing on E-cores made a perfectly balanced job show λ ≈ 0.3. Pinning one thread per P-core makes the measured imbalance reflect the workload.</div></div>
+
+<h3>The controller</h3>
+<div class="qa"><div class="q">How does your controller work?</div><div class="a">Every k = 5 steps it computes λ from the threads' accumulated loop times. Static and λ &gt; 0.15 → dynamic (chunk 8); dynamic and λ &lt; 0.05 → static. It calls <code>omp_set_schedule</code>.</div></div>
+<div class="qa"><div class="q">Why two thresholds?</div><div class="a">Hysteresis: with a single threshold, noise around it would make the controller switch back and forth every check. The gap between 0.05 and 0.15 keeps it stable; in our collapse run a noise spike caused one brief switch at t = 0.41 that was reverted after one window.</div></div>
+<div class="qa"><div class="q">What did you change from the synopsis's algorithm?</div><div class="a">Under dynamic, measured times are always balanced, so the original rule would always switch back and oscillate. We predict the static times instead: T<sub>i</sub> = B<sub>i</sub>/v<sub>i</sub> with B<sub>i</sub> the work in thread i's static block and v<sub>i</sub> = W<sub>i</sub>/t<sub>i</sub> its measured speed. Under static this equals the measured time, so it is the synopsis's metric there.</div></div>
+<div class="qa"><div class="q">How do you measure per-thread time?</div><div class="a">Each thread reads a high-resolution clock (QueryPerformanceCounter) before and after its part of the loop. MinGW's omp_get_wtime only has 1 ms resolution, which is too coarse.</div></div>
+<div class="qa"><div class="q">Why didn't your controller beat guided?</div><div class="a">It runs static during the early balanced phase and only reacts after a window, and on this hardware guided's overhead is tiny while its large first chunks keep Morton locality. So guided was best in 9 of 12 cases. The controller still beat static in all 9 clustered cases.</div></div>
+<div class="qa"><div class="q">Can the controller make things worse?</div><div class="a">Yes: a timing spike can trigger a false switch. In one MPI configuration on the uniform input it made the run 17 % slower than static. A higher threshold or a quieter machine avoids it.</div></div>
+
+<h3>MPI</h3>
+<div class="qa"><div class="q">How is work split between MPI ranks?</div><div class="a">After sorting, each rank owns one contiguous block of the Morton order. Each step every rank updates its own bodies and then <code>MPI_Allgatherv</code> gives every rank all positions and velocities; every rank builds the full tree and computes forces only for its own block.</div></div>
+<div class="qa"><div class="q">Why MPI_Allgatherv and not MPI_Allgather?</div><div class="a">The blocks can have different sizes when N is not divisible by the number of ranks (and with cost-based partitioning); the "v" version allows a different count per rank.</div></div>
+<div class="qa"><div class="q">Why replicate the tree on every rank?</div><div class="a">It is simple and every rank needs far-away information for its own bodies anyway; at our sizes the tree fits easily in memory. The cost is that the sort and tree build are repeated on every rank, which is one reason ranks are slower than threads on a single machine.</div></div>
+<div class="qa"><div class="q">Why is 1 rank × 8 threads faster than 4 ranks × 2 threads here?</div><div class="a">On one laptop threads share memory for free, while extra ranks repeat the sort and tree build, exchange data every step, and suffer imbalance between ranks (λ up to 0.11), which the OpenMP controller cannot fix.</div></div>
+
+<h3>CUDA</h3>
+<div class="qa"><div class="q">How does your direct-sum CUDA kernel work?</div><div class="a">Each GPU thread computes the force on one body. A block of 256 threads loads 256 bodies at a time into fast shared memory, all threads use that tile, then the next tile is loaded (the Nyland et al. "tiled" method from GPU Gems 3).</div></div>
+<div class="qa"><div class="q">Why is fp32 so much faster than fp64 on your GPU?</div><div class="a">The RTX 4060 Laptop GPU has very little double-precision hardware (about 1/64 of fp32). The fp32 error, 4.6 × 10<sup>−6</sup>, is far below Barnes–Hut's own 0.25 %.</div></div>
+<div class="qa"><div class="q">What is NVRTC and why did you use it?</div><div class="a">NVIDIA's run-time compiler. nvcc needs Microsoft's C++ compiler on Windows, which we did not have, so the kernels are compiled while the program runs and launched with the CUDA Driver API. Both libraries are loaded dynamically, so the program also runs without a GPU.</div></div>
+<div class="qa"><div class="q">What does the hybrid CPU + GPU mode do?</div><div class="a">CPU threads walk the tree and compute far-field forces; the leaves they must open (near field) are recorded as body ranges and the GPU computes those pairs. It pays off with large leaves (256 bodies): 1.3–1.4× faster than the best CPU-only setting.</div></div>
+
+<h3>Results and method</h3>
+<div class="qa"><div class="q">How do you know the results are correct?</div><div class="a">8 automatic checks: force accuracy against the exact sum, energy and momentum conservation, second-order convergence, equilibrium of the initial cluster, GPU vs CPU, hybrid vs CPU, and bit-identical results for every thread, rank and schedule combination.</div></div>
+<div class="qa"><div class="q">Why are the results bit-identical across thread counts?</div><div class="a">Each body's force is computed with the same operation order no matter who computes it; there is no cross-thread summation in the force loop, and the sort is deterministic, so every rank builds the same tree.</div></div>
+<div class="qa"><div class="q">How did you deal with noisy measurements?</div><div class="a">Pinned threads, 3 repetitions in shuffled order with medians, and a thermal gate that waited until a reference run was within 8 % of normal speed. Data measured while the laptop was throttling was discarded and archived.</div></div>
+<div class="qa"><div class="q">What is the main result?</div><div class="a">Adaptive beats static in 9 of 9 clustered cases (1.5–16.6 % less time) and stays within 2.3 % of static on uniform input; 8 threads give 5.6–6.4×; the GPU fp32 kernel is 88× faster than 8 CPU threads for the exact sum.</div></div>
+<div class="qa"><div class="q">What would you do next?</div><div class="a">Balance work between ranks by measured cost (done by Vishal: up to 17.2 % faster), let the controller choose among dynamic and guided (done: --balanced auto), and run on a real multi-node cluster.</div></div>
+<div class="qa"><div class="q">Who did what?</div><div class="a">[Agree this as a team before the viva: who presents which part, and who answers questions on OpenMP, MPI, CUDA and the results.]</div></div>
+
+<!-- ============================================================ 11 -->
+<h2 class="pb"><span class="n">11</span>One-page cheat sheet of numbers</h2>
+<table>
+  <tr><th>Quantity</th><th>Value</th></tr>
+  <tr><td>Pairs per step, exact, N = 65,536</td><td class="mono">N(N−1)/2 ≈ 2.1 × 10<sup>9</sup></td></tr>
+  <tr><td>Barnes–Hut force error, θ = 0.5</td><td class="mono">0.25 % rms</td></tr>
+  <tr><td>Energy drift, direct sum (N = 4,096, t = 2)</td><td class="mono">1.1 × 10<sup>−7</sup></td></tr>
+  <tr><td>Leapfrog convergence (halve dt)</td><td class="mono">error ÷ 4.05 and ÷ 4.02</td></tr>
+  <tr><td>Correctness checks</td><td class="mono">8/8 passed; 1 checksum across 13 configurations</td></tr>
+  <tr><td>Speed-up, 8 threads, N = 65,536</td><td class="mono">5.6–6.4× (efficiency 70–80 %)</td></tr>
+  <tr><td>Adaptive vs static, clustered inputs, 8 threads</td><td class="mono">faster in 9/9, by 1.5–16.6 %</td></tr>
+  <tr><td>Adaptive vs static, uniform input</td><td class="mono">within 2.3 %</td></tr>
+  <tr><td>Dynamic vs static, small uniform job (N = 4,096)</td><td class="mono">46 % slower</td></tr>
+  <tr><td>Best fixed schedule</td><td class="mono">guided in 9 of 12 cases, adaptive in 3</td></tr>
+  <tr><td>Work imbalance, cold collapse</td><td class="mono">&lt; 0.05 until t = 1.00, peak 0.64</td></tr>
+  <tr><td>Controller switches in that run</td><td class="mono">t = 0.41 (brief, noise), t = 1.16 (sustained)</td></tr>
+  <tr><td>Busiest vs least-loaded thread, static, final frame</td><td class="mono">3.7× (λ = 0.63)</td></tr>
+  <tr><td>GPU fp32 vs 8 CPU threads, exact sum, N = 65,536</td><td class="mono">24 vs 2,117 ms per step (88×)</td></tr>
+  <tr><td>CPU + GPU hybrid vs best CPU Barnes–Hut</td><td class="mono">1.3–1.4×</td></tr>
+  <tr><td>Imbalance between MPI ranks (static)</td><td class="mono">up to λ = 0.11</td></tr>
+  <tr><td>False switch case (uniform, 1 rank × 8 threads)</td><td class="mono">+17 % time</td></tr>
+  <tr><td>Cost-weighted rank partitioning (Vishal, Ryzen 7 7730U)</td><td class="mono">up to 17.2 % faster</td></tr>
+  <tr><td>Controller settings</td><td class="mono">k = 5 steps, thresholds 0.05 / 0.15, chunk 8</td></tr>
+  <tr><td>Simulation settings</td><td class="mono">θ = 0.5, ε = 0.05, dt = 0.01, 150 steps, leaf 8</td></tr>
+  <tr><td>Hardware</td><td class="mono">i7-14700HX (8 P + 12 E), RTX 4060 Laptop GPU</td></tr>
+</table>
+</body>
+</html>
