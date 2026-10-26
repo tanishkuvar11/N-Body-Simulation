@@ -30,3 +30,7 @@ presentation/zoom.png
 presentation/preview_stars.png
 presentation/fonttest.*
 presentation/embedded_tmp.pptx
+report/node_modules/
+report/render/
+report/figsheet.png
+report/synopsis.txt

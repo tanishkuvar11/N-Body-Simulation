@@ -108,9 +108,8 @@ pres.addSection({ title: "Opening" });
     { text: "AIML-A" },
   ], { x: L, y: 4.9, w: 4.7, h: 1.05, fontSize: 11, color: ONDARK, lineSpacingMultiple: 1.15 });
   mono(s, [
-    { text: "Guide        [GUIDE / FACULTY NAME]", options: { breakLine: true } },
-    { text: "Institution  [INSTITUTION]", options: { breakLine: true } },
-    { text: "Parallel Computing Architecture and Programming  ·  [COURSE CODE]", options: { breakLine: true } },
+    { text: "Manipal Institute of Technology", options: { breakLine: true } },
+    { text: "Parallel Computing Architecture and Programming", options: { breakLine: true } },
     { text: "27 October 2026" },
   ], { x: L, y: 6.0, w: 5.0, h: 1.05, fontSize: 9, color: ONDARK, lineSpacingMultiple: 1.15 });
   mono(s, `Cold collapse, N = ${sn.n.toLocaleString("en-US")}, t = ${sn.t.toFixed(2)}  ·  vermilion: bodies of the busiest thread`,
