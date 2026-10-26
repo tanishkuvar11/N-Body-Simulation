@@ -317,7 +317,7 @@ int main(int argc, char **argv)
     if (ctl_init(&ctl, sk, cfg.chunk, cfg.k, cfg.low, cfg.high, cfg.threads, balanced)) die("out of memory (controller)");
 
     if (rank == 0 && !cfg.quiet) {
-        printf("== Hybrid MPI+OpenMP+CUDA Barnes-Hut N-body ==\n");
+        printf("Hybrid MPI+OpenMP+CUDA Barnes-Hut N-body simulator\n");
         printf("ic=%s n=%d steps=%d dt=%g eps=%g theta=%g leaf=%d spin=%g\n",
                cfg.ic, cfg.n, cfg.steps, cfg.dt, cfg.eps, cfg.theta, cfg.leafcap, cfg.spin);
         printf("force=%s sched=%s balanced=%s chunk=%d k=%d low=%g high=%g | ranks=%d threads/rank=%d partition=%s\n",

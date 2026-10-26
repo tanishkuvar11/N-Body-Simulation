@@ -21,9 +21,9 @@ ONLY = int(sys.argv[sys.argv.index("--part") + 1]) if "--part" in sys.argv else 
 
 
 def banner(n, title, text):
-    print("\n" + "=" * 78)
-    print(f"  PART {n} of 5:  {title}")
-    print("=" * 78)
+    print()
+    print(f"Part {n} of 5: {title}")
+    print()
     print(text.strip("\n") + "\n")
 
 
@@ -41,7 +41,7 @@ def run(args, ranks=1):
                 print("     | " + line)
     if p.returncode != 0:
         print(p.stdout + p.stderr)
-        raise SystemExit("the simulator failed - see the message above")
+        raise SystemExit("The simulator failed. See the message above.")
     res = {}
     for line in out:
         if line.startswith("RESULT "):
@@ -124,7 +124,7 @@ Our MANAGER notices when it gets too big and switches to 'grab work when free'."
 def part3():
     banner(3, "Splitting across separate programs (MPI)", """
 Besides sharing work inside one program, the simulation can be split across separate
-programs - the way it would run on several computers of a cluster.
+programs, the way it would run on several computers of a cluster.
 Same job as 1 program x 8 workers, then as 4 programs x 2 workers each.""")
     common = ["--ic", "collide", "--n", 32768, "--steps", 30, "--no-energy", "--quiet", "--pin", "--sched", "adaptive"]
     r1, _ = run(common + ["--threads", 8])
@@ -134,13 +134,13 @@ Same job as 1 program x 8 workers, then as 4 programs x 2 workers each.""")
         print(f"   4 programs x 2 workers : {float(r4['t_total']):.2f} s   fingerprint {r4['checksum']}")
         print(f"\n   Same result?  {ok(r1['checksum'] == r4['checksum'])}")
     else:
-        print("   (mpiexec not found - skipping the 4-program run)")
+        print("   (mpiexec not found, so the 4-program run is skipped)")
 
 
 # --------------------------------------------------------------------------------------------
 def part4():
     banner(4, "Using the graphics card (CUDA)", """
-The graphics card has thousands of small cores - ideal for the repetitive force maths.
+The graphics card has thousands of small cores, which suits the repetitive force maths.
 First it does the EXACT calculation for 65,536 stars, then it helps the shortcut method.""")
     r, out = run(["--force", "gpu-direct", "--gpu-float", "--n", 65536, "--steps", 10, "--no-energy", "--verify",
                   "--threads", 8])
@@ -178,7 +178,7 @@ PARTS = [part1, part2, part3, part4, part5]
 
 def main():
     if not os.path.isfile(EXE):
-        sys.exit("bin/nbody.exe not found - run `python build.py` first")
+        sys.exit("bin/nbody.exe not found. Run `python build.py` first.")
     for i, p in enumerate(PARTS, 1):
         if ONLY and i != ONLY:
             continue
