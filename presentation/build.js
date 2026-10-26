@@ -41,10 +41,7 @@ pres.defineSlideMaster({
                                 fontSize: 30, bold: true, color: INK, valign: "top", align: "left", lineSpacingMultiple: 0.95 }, text: "" } },
     { placeholder: { options: { name: "takeaway", type: "body", x: L, y: 2.02, w: 11.0, h: 0.5, margin: 0, fontFace: SANS,
                                 fontSize: 15, color: MUTED, valign: "top", align: "left" }, text: "" } },
-    { text: { text: "Adaptive scheduling for parallel N-body simulation  ·  PCAP [COURSE CODE]",
-              options: { x: L, y: 6.98, w: 9, h: 0.25, margin: 0, fontFace: MONO, fontSize: 9, color: MUTED } } },
   ],
-  slideNumber: { x: R - 0.6, y: 6.98, w: 0.6, h: 0.25, fontFace: MONO, fontSize: 9, color: MUTED, align: "right" },
 });
 pres.defineSlideMaster({ title: "DARK", background: { color: INK }, objects: [] });
 
