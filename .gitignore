@@ -1,0 +1,19 @@
+# build outputs (recreated by `python build.py`)
+bin/
+build/
+*.exe
+*.o
+
+# CUDA headers + NVRTC (downloaded by `python build.py --fetch-cuda`; DLLs exceed GitHub's file limit)
+third_party/
+
+# raw animation snapshots (recreated by `python scripts/animate.py`)
+results/animation/*.snap
+
+# Python / editors / OS
+__pycache__/
+*.pyc
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

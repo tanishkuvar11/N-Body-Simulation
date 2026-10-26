@@ -1,0 +1,7 @@
+== ext: 40 configurations x 3 reps -> E:\BTech 3rd Year (Sem 5)\PCAP-Project\results\ext.csv
+  [1/120] ext:uniform_n65536_static:r0  t_total=6.664s  (6.7s wall)
+  [2/120] ext:plummer_n16384_adaptive-gui-k1:r0  t_total=2.182s  (2.3s wall)
+  [3/120] ext:plummer_n65536_adaptive-gui-k5:r0  t_total=11.889s  (12.0s wall)
+  [4/120] ext:uniform_n16384_adaptive-gui-k5:r0  t_total=1.455s  (1.5s wall)
+  [5/120] ext:collide_n65536_guided:r0  t_total=12.003s  (12.1s wall)
+  [6/120] ext:collapse_n16384_guided:r0  t_total=1.707s  (1.8s wall)
