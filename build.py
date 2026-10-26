@@ -101,7 +101,18 @@ def main():
         if not os.path.isfile(implib):
             if dll and shutil.which("gendef") and shutil.which("dlltool"):
                 run(["gendef", dll], cwd=BUILD)
-                run(["dlltool", "-d", "msmpi.def", "-l", implib, "-D", "msmpi.dll"], cwd=BUILD)
+                # relative output name: dlltool derives temp-file names from the full output path,
+                # which breaks for long paths; build to a temp name so a failure leaves nothing behind
+                tmp = os.path.join(BUILD, "libmsmpi_tmp.a")
+                if os.path.exists(tmp):
+                    os.remove(tmp)
+                try:
+                    run(["dlltool", "-d", "msmpi.def", "-l", "libmsmpi_tmp.a", "-D", "msmpi.dll"], cwd=BUILD)
+                except subprocess.CalledProcessError:
+                    if os.path.exists(tmp):
+                        os.remove(tmp)
+                    raise
+                os.replace(tmp, implib)
             elif libdir and os.path.isfile(os.path.join(libdir, "msmpi.lib")):
                 implib = os.path.join(libdir, "msmpi.lib")
             else:
