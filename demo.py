@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
-"""Live demo (~5 minutes): correctness, adaptive scheduling, MPI, CUDA, results.
+"""Live demo (~6 minutes), explained in plain language.
 
     python demo.py              # pauses between parts (press Enter)
     python demo.py --no-pause   # runs straight through
     python demo.py --part 2     # run only one part (1-5)
+    python demo.py --details    # also show the simulator commands and raw output
 """
 import os
+import re
 import subprocess
 import sys
 
@@ -14,127 +16,161 @@ from common import EXE, MPIEXEC, RESULTS, env_with_dlls  # noqa: E402
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 PAUSE = "--no-pause" not in sys.argv
+DETAILS = "--details" in sys.argv
 ONLY = int(sys.argv[sys.argv.index("--part") + 1]) if "--part" in sys.argv else None
 
 
 def banner(n, title, text):
     print("\n" + "=" * 78)
-    print(f"  PART {n}: {title}")
+    print(f"  PART {n} of 5:  {title}")
     print("=" * 78)
-    print(text.strip() + "\n")
+    print(text.strip("\n") + "\n")
 
 
-def run(args, ranks=1, keep=None):
-    """Run the simulator, echoing the command; keep = substrings of lines to show (None = all)."""
+def run(args, ranks=1):
+    """Run the simulator; returns (RESULT dict, stdout lines).  Raw output only with --details."""
     cmd = [EXE] + [str(a) for a in args]
     if ranks > 1:
         cmd = [MPIEXEC, "-n", str(ranks)] + cmd
-    shown = " ".join(["mpiexec -n " + str(ranks)] if ranks > 1 else []) + " nbody.exe " + " ".join(str(a) for a in args)
-    print(f"$ {shown.strip()}")
     p = subprocess.run(cmd, capture_output=True, text=True, env=env_with_dlls(), cwd=os.path.dirname(EXE))
     out = p.stdout.splitlines()
-    for line in out:
-        if line.startswith("RESULT"):
-            continue
-        if keep is None or any(k in line for k in keep):
-            print("   " + line)
+    if DETAILS:
+        print("   $ " + ("mpiexec -n %d " % ranks if ranks > 1 else "") + "nbody.exe " + " ".join(str(a) for a in args))
+        for line in out:
+            if not line.startswith("RESULT"):
+                print("     | " + line)
     if p.returncode != 0:
-        print(p.stderr)
+        print(p.stdout + p.stderr)
+        raise SystemExit("the simulator failed - see the message above")
     res = {}
     for line in out:
         if line.startswith("RESULT "):
             res = dict(kv.split("=", 1) for kv in line[7:].split())
-    return res
+    return res, out
 
 
 def wait():
     if PAUSE:
-        input("\n   [Enter] to continue ...")
+        input("\n   Press Enter to continue ...")
 
 
+def ok(flag):
+    return "YES" if flag else "NO"
+
+
+# --------------------------------------------------------------------------------------------
 def part1():
-    banner(1, "Correctness", """
-Barnes-Hut forces are checked against exact direct summation; energy and momentum are
-conserved; and because every rank and thread computes each body's force with the same
-operation sequence, the final state is BIT-IDENTICAL for any schedule / thread / rank count.""")
-    run(["--ic", "plummer", "--n", 16384, "--steps", 0, "--threads", 8, "--pin", "--verify"], keep=["VERIFY", "virial"])
-    print()
+    banner(1, "Does it compute the right answer?", """
+We simulate stars pulling on each other by gravity. To be fast we use a shortcut
+(Barnes-Hut): far-away groups of stars are treated as one big star.
+Check 1: how close is the shortcut to the exact calculation?
+Check 2: do 1 worker and 8 workers give exactly the same result?""")
+    r, _ = run(["--ic", "plummer", "--n", 16384, "--steps", 0, "--threads", 8, "--pin", "--verify"])
+    err = float(r["verify_rms"]) * 100
+    print(f"   Shortcut vs exact calculation, 16,384 stars:  average error {err:.2f} %")
+
     common = ["--ic", "collide", "--n", 8000, "--steps", 20, "--no-energy", "--quiet"]
     sums = []
-    for t, s in [(1, "static"), (8, "dynamic"), (8, "adaptive")]:
-        r = run(common + ["--threads", t, "--sched", s])
-        sums.append(r.get("checksum"))
-        print(f"   -> threads={t:<2} sched={s:<9} checksum {r.get('checksum')}")
-    print(f"\n   identical: {len(set(sums)) == 1}")
+    for t, s, words in [(1, "static", "1 worker"), (8, "dynamic", "8 workers, sharing on demand"),
+                        (8, "adaptive", "8 workers, with our manager")]:
+        r, _ = run(common + ["--threads", t, "--sched", s])
+        sums.append(r["checksum"])
+        print(f"   {words:<32} -> final result fingerprint {r['checksum']}")
+    print(f"\n   Same result every time?  {ok(len(set(sums)) == 1)}")
+    print("   (Splitting the work between workers changes the speed, never the answer.)")
+
+
+# --------------------------------------------------------------------------------------------
+STEP_RE = re.compile(r"step\s+(\d+)\s+t=\s*([0-9.]+)\s+step=\s*([0-9.]+)s\s+lambda=([0-9.]+).*policy=(\w+)")
+
+
+def show_progress(out, label):
+    print(f"   {label}")
+    print("     step   how far the slowest worker is behind         way of sharing work")
+    prev = None
+    for line in out:
+        m = STEP_RE.search(line)
+        if not m:
+            continue
+        step, lam, pol = int(m.group(1)), float(m.group(4)), m.group(5)
+        bar = "#" * min(30, int(round(lam * 50)))
+        share = "equal shares (static)" if pol == "static" else "grab when free (dynamic)"
+        note = "   <-- manager switched!" if prev is not None and pol != prev else ""
+        print(f"     {step:4d}   {100 * lam:4.0f} %  {bar:<30}   {share}{note}")
+        prev = pol
 
 
 def part2():
-    banner(2, "Adaptive scheduling on a collapsing cloud", """
-A cold uniform sphere collapses under gravity: the work per body is balanced at first and becomes
-very unbalanced once a dense core forms (t ~ 1.1).  Watch lambda (= slowest thread / average - 1):
-with STATIC it grows and the step time rises; ADAPTIVE switches to dynamic when lambda > 0.15.""")
+    banner(2, "The main idea: our manager vs equal shares", """
+8 workers (CPU cores) share the stars. A cloud of stars collapses into a dense clump.
+Stars inside the clump take much longer to calculate, so with EQUAL SHARES the worker
+holding the clump falls far behind while the others wait.
+
+Watch the '#' bars: they show how far behind the slowest worker is.
+Our MANAGER notices when it gets too big and switches to 'grab work when free'.""")
     args = ["--ic", "collapse", "--n", 32768, "--steps", 150, "--threads", 8, "--pin", "--print", 15, "--no-energy"]
-    a = run(args + ["--sched", "static"], keep=["step ", "done"])
+    a, out_a = run(args + ["--sched", "static"])
+    show_progress(out_a, "A) EQUAL SHARES the whole time (static):")
     print()
-    b = run(args + ["--sched", "adaptive"], keep=["step ", "done"])
+    b, out_b = run(args + ["--sched", "adaptive"])
+    show_progress(out_b, "B) WITH OUR MANAGER (adaptive):")
     ta, tb = float(a["t_total"]), float(b["t_total"])
-    print(f"\n   static {ta:.2f} s   adaptive {tb:.2f} s   ->  {100 * (ta - tb) / ta:+.1f} %  "
-          f"(controller switches: {b['switches']})")
+    print(f"\n   Total time:  equal shares {ta:.2f} s   |   with our manager {tb:.2f} s"
+          f"   ->  {100 * (ta - tb) / ta:.0f} % faster")
+    print("   (Exact percentages vary a bit from run to run on a laptop.)")
 
 
+# --------------------------------------------------------------------------------------------
 def part3():
-    banner(3, "Hybrid MPI + OpenMP", """
-Bodies are Morton-sorted and block-partitioned over MPI ranks; MPI_Allgatherv replicates
-positions each step.  Same physics, same checksum - 1 rank x 8 threads vs 4 ranks x 2 threads.""")
+    banner(3, "Splitting across separate programs (MPI)", """
+Besides sharing work inside one program, the simulation can be split across separate
+programs - the way it would run on several computers of a cluster.
+Same job as 1 program x 8 workers, then as 4 programs x 2 workers each.""")
     common = ["--ic", "collide", "--n", 32768, "--steps", 30, "--no-energy", "--quiet", "--pin", "--sched", "adaptive"]
-    r1 = run(common + ["--threads", 8])
-    print(f"   -> 1 rank x 8 threads : {float(r1['t_total']):.2f} s  checksum {r1['checksum']}")
+    r1, _ = run(common + ["--threads", 8])
+    print(f"   1 program  x 8 workers : {float(r1['t_total']):.2f} s   fingerprint {r1['checksum']}")
     if MPIEXEC:
-        r4 = run(common + ["--threads", 2], ranks=4)
-        print(f"   -> 4 ranks x 2 threads: {float(r4['t_total']):.2f} s  checksum {r4['checksum']}  "
-              f"(comm {float(r4['t_comm']):.2f} s)")
-        print(f"\n   identical: {r1['checksum'] == r4['checksum']}")
+        r4, _ = run(common + ["--threads", 2], ranks=4)
+        print(f"   4 programs x 2 workers : {float(r4['t_total']):.2f} s   fingerprint {r4['checksum']}")
+        print(f"\n   Same result?  {ok(r1['checksum'] == r4['checksum'])}")
     else:
-        print("   (mpiexec not found - skipping the multi-rank run)")
+        print("   (mpiexec not found - skipping the 4-program run)")
 
 
+# --------------------------------------------------------------------------------------------
 def part4():
-    banner(4, "CUDA on the GPU", """
-Tiled O(N^2) direct-sum kernel (shared-memory tiles, Nyland et al.) compiled at run time with NVRTC,
-compared with the exact CPU result; then the Barnes-Hut + GPU near-field hybrid vs the CPU tree code.""")
-    run(["--force", "gpu-direct", "--gpu-float", "--n", 65536, "--steps", 10, "--no-energy", "--verify", "--threads", 8],
-        keep=["GPU:", "VERIFY", "done"])
-    print()
-    a = run(["--force", "bh", "--leaf", 16, "--n", 65536, "--steps", 10, "--no-energy", "--threads", 8, "--pin"],
-            keep=["done"])
-    b = run(["--force", "bh-gpu", "--gpu-float", "--leaf", 256, "--n", 65536, "--steps", 10, "--no-energy",
-             "--threads", 8, "--pin"], keep=["done"])
-    print(f"\n   Barnes-Hut per step: CPU {float(a['t_step']) * 1e3:.1f} ms   CPU+GPU hybrid "
-          f"{float(b['t_step']) * 1e3:.1f} ms  ->  {float(a['t_step']) / float(b['t_step']):.2f}x")
+    banner(4, "Using the graphics card (CUDA)", """
+The graphics card has thousands of small cores - ideal for the repetitive force maths.
+First it does the EXACT calculation for 65,536 stars, then it helps the shortcut method.""")
+    r, out = run(["--force", "gpu-direct", "--gpu-float", "--n", 65536, "--steps", 10, "--no-energy", "--verify",
+                  "--threads", 8])
+    gpu = next((l.split(":", 1)[1].strip() for l in out if l.startswith("GPU:")), "GPU")
+    print(f"   Graphics card: {gpu}")
+    print(f"   Exact calculation, 65,536 stars: {float(r['t_step']) * 1000:.0f} ms per step, "
+          f"error vs CPU {float(r['verify_rms']) * 100:.4f} %")
+    a, _ = run(["--force", "bh", "--leaf", 16, "--n", 65536, "--steps", 10, "--no-energy", "--threads", 8, "--pin"])
+    b, _ = run(["--force", "bh-gpu", "--gpu-float", "--leaf", 256, "--n", 65536, "--steps", 10, "--no-energy",
+                "--threads", 8, "--pin"])
+    ta, tb = float(a["t_step"]) * 1000, float(b["t_step"]) * 1000
+    print(f"   Shortcut method:  CPU only {ta:.0f} ms per step   |   CPU + graphics card {tb:.0f} ms per step"
+          f"   ->  {ta / tb:.1f}x faster")
 
 
+# --------------------------------------------------------------------------------------------
 def part5():
-    banner(5, "Animation and benchmark results", "Playing results/animation.mp4, then opening the figures and RESULTS.md ...")
-    video = os.path.join(RESULTS, "animation.mp4")
-    if os.path.isfile(video):
-        print("   " + video)
-        if os.name == "nt":
-            os.startfile(video)  # noqa: S606 - default video player
-            if PAUSE:
-                print()
-                input("   [Enter] after the video to open the figures ...")
+    banner(5, "Results", """
+Opening the results page in your web browser (works without internet):
+the animation, the main graphs, and what they mean.""")
+    page = os.path.join(RESULTS, "presentation.html")
+    if not os.path.isfile(page):
+        print("   results/presentation.html is missing")
+        return
+    print("   " + page)
+    if os.name == "nt":
+        os.startfile(page)  # noqa: S606 - opens in the default browser
     else:
-        print("   (no animation yet - run: python scripts/animate.py)")
-    figs = ["imbalance_traces.png", "relative_to_static.png", "speedup_n65536.png", "mpi_hybrid.png", "gpu.png"]
-    for f in figs:
-        p = os.path.join(RESULTS, "figures", f)
-        if os.path.isfile(p):
-            print("   " + p)
-            if os.name == "nt":
-                os.startfile(p)  # noqa: S606 - opens in the default image viewer
-    md = os.path.join(ROOT, "RESULTS.md")
-    if os.path.isfile(md) and os.name == "nt":
-        os.startfile(md)
+        import webbrowser
+        webbrowser.open("file://" + page)
 
 
 PARTS = [part1, part2, part3, part4, part5]

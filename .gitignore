@@ -17,3 +17,7 @@ __pycache__/
 .idea/
 .DS_Store
 Thumbs.db
+
+# personal notes and local tooling
+PROJECT_EXPLAINED.txt
+.claude/
