@@ -58,6 +58,14 @@
   .ba-gain small { display: block; font-size: .75rem; font-weight: 400; color: var(--ink2); margin-top: 3px; }
   .ba-stats { margin-top: 14px; }
   @media (max-width: 640px) { .ba-row { grid-template-columns: 1fr; } .ba-gain { text-align: left; } }
+  .su-h { font-size: 1.05rem; margin: 22px 0 6px; }
+  .su td { vertical-align: middle; }
+  .su td.t { font-weight: 600; width: 70px; }
+  .su td small { display: block; color: var(--ink2); font-size: .82rem; margin-top: 2px; }
+  .su-bar { height: 22px; border-radius: 3px; display: flex; align-items: center; min-width: 52px; }
+  .su-bar span { font-size: .85rem; padding-left: 8px; white-space: nowrap; }
+  .su-bar.st { background: var(--line); color: var(--ink); }
+  .su-bar.ad { background: var(--accent); color: #fff; }
 </style>
 </head>
 <body>
@@ -66,7 +74,8 @@
   <p class="sub">PCAP project &middot; Tanish Hemant Kuvar, M. Vishal Kumar, Samyak Jain &middot; MPI + OpenMP + CUDA</p>
   <nav>
     <a href="#idea">1. The idea</a><a href="#video">2. Animation</a><a href="#before-after">3. Before vs after</a>
-    <a href="#conclusion">4. Conclusion</a>
+    <a href="#speedup">4. Speed-up</a>
+    <a href="#conclusion">5. Conclusion</a>
   </nav>
 
   <h2 id="idea"><span class="n">1</span>The idea in one minute</h2>
@@ -196,7 +205,43 @@
   the shorter "after" bar is the run time with our controller. When the stars do not clump, the controller stays on static
   and the run time is within 2.3% of "before".</p>
 
-  <h2 id="conclusion"><span class="n">4</span>Conclusion</h2>
+  <h2 id="speedup"><span class="n">4</span>Speed-up and efficiency</h2>
+  <p><b>Speed-up</b> = time with 1 thread &divide; time with <i>p</i> threads: how many times faster it gets.
+  <b>Efficiency</b> = speed-up &divide; number of threads: how much of the perfect speed-up we get
+  (8 threads would ideally give 8&times;, i.e. 100%).</p>
+  <div class="grid">
+    <div class="stat"><b>5.7&ndash;6.0&times;</b><span>speed-up with 8 threads, our method (65,536 stars)</span></div>
+    <div class="stat"><b>71&ndash;75%</b><span>efficiency with 8 threads</span></div>
+  </div>
+  <h3 class="su-h">Two clusters colliding (stars clump), 65,536 stars</h3>
+  <table class="su">
+    <tr><th>Threads</th><th>Ideal</th><th>Static (before)</th><th>Our method (after)</th></tr>
+      <tr><td class="t">1</td><td>1&times;</td>
+        <td><div class="su-bar st" style="width:12.5%"><span>1.00&times;</span></div><small>efficiency 100%</small></td>
+        <td><div class="su-bar ad" style="width:12.5%"><span>1.00&times;</span></div><small>efficiency 100%</small></td></tr>
+      <tr><td class="t">2</td><td>2&times;</td>
+        <td><div class="su-bar st" style="width:23.6%"><span>1.89&times;</span></div><small>efficiency 95%</small></td>
+        <td><div class="su-bar ad" style="width:23.6%"><span>1.89&times;</span></div><small>efficiency 94%</small></td></tr>
+      <tr><td class="t">4</td><td>4&times;</td>
+        <td><div class="su-bar st" style="width:42.2%"><span>3.37&times;</span></div><small>efficiency 84%</small></td>
+        <td><div class="su-bar ad" style="width:42.5%"><span>3.40&times;</span></div><small>efficiency 85%</small></td></tr>
+      <tr><td class="t">8</td><td>8&times;</td>
+        <td><div class="su-bar st" style="width:70.8%"><span>5.67&times;</span></div><small>efficiency 71%</small></td>
+        <td><div class="su-bar ad" style="width:75.3%"><span>6.02&times;</span></div><small>efficiency 75%</small></td></tr>
+  </table>
+  <h3 class="su-h">With 8 threads, every input (speed-up, efficiency in brackets)</h3>
+  <table>
+    <tr><th>Input</th><th>Static</th><th>Our method</th></tr>
+      <tr><td>Uniform (no clumping)</td><td>6.06&times; (76%)</td><td><b>5.92&times; (74%)</b></td></tr>
+      <tr><td>Star cluster</td><td>5.70&times; (71%)</td><td><b>6.03&times; (75%)</b></td></tr>
+      <tr><td>Two clusters colliding</td><td>5.67&times; (71%)</td><td><b>6.02&times; (75%)</b></td></tr>
+      <tr><td>Collapsing cloud</td><td>5.60&times; (70%)</td><td><b>5.69&times; (71%)</b></td></tr>
+  </table>
+  <p style="color:var(--ink2);font-size:.95rem">Speed-up is measured against one thread with static scheduling. It is not a full
+  8&times; because part of every step (sorting the stars and building the tree) runs on a single thread, and memory
+  speed limits the rest (Amdahl's law). Median of 3 runs, 150 steps.</p>
+
+  <h2 id="conclusion"><span class="n">5</span>Conclusion</h2>
   <table>
     <tr><th>Question</th><th>Answer</th></tr>
     <tr><td>Is it correct?</td><td>Yes &mdash; 8 automatic checks: accuracy vs the exact calculation (0.25&nbsp;%), energy
