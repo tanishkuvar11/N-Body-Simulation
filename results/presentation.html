@@ -81,11 +81,11 @@
   <h2 id="idea"><span class="n">1</span>The idea in one minute</h2>
   <div class="card">
     <p>We simulate thousands of <b>stars pulling on each other by gravity</b>. Every step, the force on each star
-    must be calculated &mdash; that is the expensive part, so <b>8 workers</b> (the CPU's 8 cores) share it.</p>
+    must be calculated. That is the expensive part, so <b>8 workers</b> (the CPU's 8 cores) share it.</p>
     <ul>
       <li><b>Equal shares</b> (OpenMP &ldquo;static&rdquo;): every worker gets the same <i>number</i> of stars.</li>
       <li><b>The problem:</b> stars form <b>clumps</b>. A star inside a clump has many close neighbours and takes much
-        longer to calculate &mdash; so the worker holding the clump falls behind while the others sit idle.</li>
+        longer to calculate, so the worker holding the clump falls behind while the others sit idle.</li>
       <li><b>Our solution:</b> a small <b>manager</b> (the &ldquo;adaptive controller&rdquo;) measures every few steps how long
         each worker took. If the slowest one is too far behind, it switches to <b>&ldquo;grab work when free&rdquo;</b>
         (OpenMP &ldquo;dynamic&rdquo;), so nobody waits. When things are balanced again it switches back.</li>
@@ -104,9 +104,9 @@
   <video src="animation.mp4" controls preload="metadata"></video>
   <p>Each dot is a star; <b>its colour shows which worker calculates it</b>.</p>
   <ul>
-    <li><b>Left &ndash; equal shares:</b> every worker owns a region of space. When the cloud collapses into a clump, the
+    <li><b>Left, equal shares:</b> every worker owns a region of space. When the cloud collapses into a clump, the
       workers holding it get <b>tall bars</b> (slow) and the rest get short bars (waiting).</li>
-    <li><b>Right &ndash; our manager:</b> at the dotted line it switches to &ldquo;grab work when free&rdquo;: the colours
+    <li><b>Right, our manager:</b> at the dotted line it switches to &ldquo;grab work when free&rdquo;: the colours
       <b>mix</b> and all bars become <b>equal</b>.</li>
     <li><b>Bottom:</b> total time used. After the switch the manager pulls ahead.</li>
     <li><b>Last part of the video:</b> the graphics card. Four ways to compute the forces for 262,144 stars; our
@@ -244,12 +244,12 @@
   <h2 id="conclusion"><span class="n">5</span>Conclusion</h2>
   <table>
     <tr><th>Question</th><th>Answer</th></tr>
-    <tr><td>Is it correct?</td><td>Yes &mdash; 8 automatic checks: accuracy vs the exact calculation (0.25&nbsp;%), energy
+    <tr><td>Is it correct?</td><td>Yes. 8 automatic checks: accuracy vs the exact calculation (0.25&nbsp;%), energy
       conserved, and identical results for every way of splitting the work.</td></tr>
-    <tr><td>Does clumping hurt equal shares?</td><td>Yes &mdash; the slowest worker falls up to 50&ndash;60&nbsp;% behind.</td></tr>
+    <tr><td>Does clumping hurt equal shares?</td><td>Yes. The slowest worker falls up to 50&ndash;60&nbsp;% behind.</td></tr>
     <tr><td>Does our manager help?</td><td>Yes, versus equal shares: faster on every clumpy cloud (up to 17&nbsp;%),
       no cost when balanced.</td></tr>
-    <tr><td>Is it the best possible?</td><td>No &mdash; the built-in &ldquo;guided&rdquo; schedule was equally good here.</td></tr>
+    <tr><td>Is it the best possible?</td><td>No. The built-in &ldquo;guided&rdquo; schedule was equally good here.</td></tr>
     <tr><td>Next steps</td><td>Balance work between programs too (done by Vishal: <code>--partition cost</code>),
       and let the manager pick the best schedule itself (<code>--balanced auto</code>).</td></tr>
   </table>
