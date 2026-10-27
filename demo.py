@@ -145,30 +145,41 @@ Same job as 1 program x 8 workers, then as 4 programs x 2 workers each.""")
 
 # --------------------------------------------------------------------------------------------
 def part4():
-    banner(4, "Using the graphics card (CUDA)", """
-The graphics card has thousands of small cores, which suits the repetitive force maths.
-First it does the EXACT calculation for 65,536 stars, then it helps the shortcut method.""")
+    N = 262144
+    banner(4, "Using the graphics card (CUDA)", f"""
+Four ways to compute the forces for {N:,} stars, 8 CPU threads in every case:
+the exact method (every star against every other) and the Barnes-Hut shortcut,
+each on the CPU alone and with the graphics card helping.""")
+    common = ["--ic", "plummer", "--n", N, "--steps", 5, "--no-energy", "--threads", 8, "--pin"]
+    print("   Running the three fast methods live (a few seconds each) ...")
     try:
-        r, out = run(["--force", "gpu-direct", "--gpu-float", "--n", 65536, "--steps", 10, "--no-energy", "--verify",
-                      "--threads", 8], quiet_fail=True)
+        g, out = run(common + ["--force", "gpu-direct", "--gpu-float"], quiet_fail=True)
     except SimFailed:
         print("   The NVIDIA graphics card is not available right now (Windows only shows the integrated")
         print("   graphics). Laptops often switch it off on battery: plug in the charger, or set the GPU mode")
         print("   to Hybrid/Standard in the laptop's control app, then run:  python demo.py --part 4")
         print()
-        print("   Recorded result from our benchmark (RTX 4060, 65,536 stars, exact calculation):")
-        print("   CPU with 8 threads 2,117 ms per step   |   graphics card 24 ms per step   ->  88x faster")
+        print(f"   Recorded result from our measurements (RTX 4060, {N:,} stars, ms per step):")
+        print("   exact on CPU 32,147  |  exact on GPU 263  |  shortcut on CPU 272  |  shortcut CPU + GPU 206")
         return
+    c, _ = run(common + ["--force", "bh", "--leaf", 16])
+    h, _ = run(common + ["--force", "bh-gpu", "--gpu-float", "--leaf", 256])
     gpu = next((l.split(":", 1)[1].strip() for l in out if l.startswith("GPU:")), "GPU")
+    rows = [("Exact method, CPU only", 32147.0, "measured separately: too slow to run live"),
+            ("Exact method, graphics card", float(g["t_step"]) * 1000, "live"),
+            ("Barnes-Hut shortcut, CPU only", float(c["t_step"]) * 1000, "live"),
+            ("Barnes-Hut shortcut, CPU + graphics card", float(h["t_step"]) * 1000, "live")]
+    best = min(rows, key=lambda r: r[1])
     print(f"   Graphics card: {gpu}")
-    print(f"   Exact calculation, 65,536 stars: {float(r['t_step']) * 1000:.0f} ms per step, "
-          f"error vs CPU {float(r['verify_rms']) * 100:.4f} %")
-    a, _ = run(["--force", "bh", "--leaf", 16, "--n", 65536, "--steps", 10, "--no-energy", "--threads", 8, "--pin"])
-    b, _ = run(["--force", "bh-gpu", "--gpu-float", "--leaf", 256, "--n", 65536, "--steps", 10, "--no-energy",
-                "--threads", 8, "--pin"])
-    ta, tb = float(a["t_step"]) * 1000, float(b["t_step"]) * 1000
-    print(f"   Shortcut method:  CPU only {ta:.0f} ms per step   |   CPU + graphics card {tb:.0f} ms per step"
-          f"   ->  {ta / tb:.1f}x faster")
+    print()
+    print("   Method                                      time per step")
+    for name, ms, how in rows:
+        mark = "   <-- fastest" if (name, ms, how) == best else ""
+        print(f"   {name:<42} {ms:>9,.0f} ms   ({how}){mark}")
+    print()
+    print(f"   Our CPU + graphics card shortcut is {rows[0][1] / rows[3][1]:,.0f}x faster than the exact CPU method,")
+    print(f"   {rows[2][1] / rows[3][1]:.1f}x faster than the shortcut on the CPU alone, and "
+          f"{rows[1][1] / rows[3][1]:.1f}x faster than brute force on the graphics card.")
 
 
 # --------------------------------------------------------------------------------------------
