@@ -88,7 +88,7 @@
     <div class="stat"><b>~6&times;</b><span>faster with 8 workers than with 1</span></div>
     <div class="stat"><b>up to 17&nbsp;%</b><span>faster than equal shares when stars clump</span></div>
     <div class="stat"><b>&asymp; 0&nbsp;%</b><span>cost when there are no clumps</span></div>
-    <div class="stat"><b>88&times;</b><span>graphics card vs CPU on the exact calculation</span></div>
+    <div class="stat"><b>150&times;</b><span>our CPU + graphics card method vs the exact CPU method (262,144 stars)</span></div>
   </div>
 
   <h2 id="video"><span class="n">2</span>Watch it happen</h2>
@@ -100,6 +100,9 @@
     <li><b>Right &ndash; our manager:</b> at the dotted line it switches to &ldquo;grab work when free&rdquo;: the colours
       <b>mix</b> and all bars become <b>equal</b>.</li>
     <li><b>Bottom:</b> total time used. After the switch the manager pulls ahead.</li>
+    <li><b>Last part of the video:</b> the graphics card. Four ways to compute the forces for 262,144 stars; our
+      Barnes&ndash;Hut shortcut with the CPU and graphics card working together is the fastest, about 150&times;
+      faster than the exact method on the CPU.</li>
   </ul>
   <p class="say">&ldquo;Equal shares can't react when stars clump. Our manager notices the imbalance and fixes it automatically.&rdquo;</p>
 
