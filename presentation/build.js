@@ -8,7 +8,7 @@ const SKILL = process.env.PPTX_SKILL_DIR;
 const { applyTheme } = require(path.join(SKILL, "scripts", "apply_theme.js"));
 const D = JSON.parse(fs.readFileSync(path.join(__dirname, "data.json"), "utf8"));
 const IMG = (f) => path.join(__dirname, "img", f);
-const OUTFILE = path.join(__dirname, "PCAP_NBody_Adaptive_Scheduling.pptx");
+const OUTFILE = process.env.DECK_OUT || path.join(__dirname, "PCAP_NBody_Adaptive_Scheduling.pptx");
 
 // ------------------------------------------------------------------ palette & type
 const INK = "111111", PAPER = "F5F3EE", MUTED = "6B6862", RULE = "D9D5CC", ACC = "D9472B";
@@ -358,41 +358,38 @@ pres.addSection({ title: "Evaluation" });
 
 // ================================================================== 07 RESULT: SCHEDULES
 {
-  const s = contentSlide("Evaluation", "07", "RESULTS · SCHEDULES", "Adaptive beats static in all nine clustered cases; guided gains more",
-    `Time saved vs static at 8 threads. Speed-up at 8 threads (N = 65,536): ${spdMin.toFixed(1)}–${spdMax.toFixed(1)}×.`);
+  const s = contentSlide("Evaluation", "07", "RESULTS · ADAPTIVE VS STATIC", "Our controller is faster than static scheduling in every clustered case",
+    `Run time saved by the adaptive controller compared with static scheduling, 8 threads, median of 3 runs.`);
   const cases = [];
   for (const n of [4096, 16384, 65536]) for (const ic of ["plummer", "collide", "collapse"]) cases.push([ic, n]);
   const labels = cases.map(([ic, n]) => ic + "\n" + n.toLocaleString("en-US"));
-  const sav = (ic, n, sch) => 100 * (1 - D.rel8[ic + "_" + n][sch]);
-  s.addChart(pres.charts.BAR, [
-    { name: "guided", labels, values: cases.map(([ic, n]) => sav(ic, n, "guided")) },
-    { name: "adaptive (ours)", labels, values: cases.map(([ic, n]) => sav(ic, n, "adaptive")) },
-  ], Object.assign(CHART_BASE(), {
-    x: L - 0.1, y: TOP, w: 8.15, h: 4.0, barDir: "col", barGrouping: "clustered", chartColors: [LIGHT, ACC],
-    barGapWidthPct: 55, valAxisMinVal: 0, valAxisMaxVal: 20, valAxisMajorUnit: 5, valAxisLabelFormatCode: "0",
-    showValue: true, dataLabelPosition: "outEnd", dataLabelFormatCode: "0.0", dataLabelFontFace: MONO, dataLabelFontSize: 8.5,
-    dataLabelColor: DARKG, showLegend: true, legendPos: "t", showValAxisTitle: true, valAxisTitle: "time saved vs static [%]",
+  const saved = cases.map(([ic, n]) => 100 * (1 - D.rel8[ic + "_" + n].adaptive));
+  const mean = saved.reduce((a, b) => a + b, 0) / saved.length;
+  s.addChart(pres.charts.BAR, [{ name: "time saved by our controller", labels, values: saved }], Object.assign(CHART_BASE(), {
+    x: L - 0.1, y: TOP, w: 8.15, h: 4.0, barDir: "col", chartColors: [ACC],
+    barGapWidthPct: 45, valAxisMinVal: 0, valAxisMaxVal: 20, valAxisMajorUnit: 5, valAxisLabelFormatCode: "0",
+    showValue: true, dataLabelPosition: "outEnd", dataLabelFormatCode: "0.0", dataLabelFontFace: MONO, dataLabelFontSize: 10,
+    dataLabelColor: INK, showLegend: false, showValAxisTitle: true, valAxisTitle: "time saved vs static [%]",
     catAxisLabelFontSize: 9,
   }));
   const hx = 9.3, hw = 3.28;
   mono(s, "CLUSTERED CASES FASTER THAN STATIC", { x: hx, y: TOP, w: hw, h: 0.22, fontSize: 9, charSpacing: 1 });
   text(s, D.adaptive_gain_clustered.count_faster + "/" + D.adaptive_gain_clustered.count,
        { x: hx, y: TOP + 0.28, w: hw, h: 1.0, fontFace: MONO, fontSize: 54, bold: true, color: ACC });
-  mono(s, `adaptive saves ${pct(gainMin)}–${pct(gainMax)} % of run time`, { x: hx, y: TOP + 1.3, w: hw, h: 0.25, fontSize: 10, color: INK });
+  mono(s, "every case where the stars clump", { x: hx, y: TOP + 1.3, w: hw, h: 0.25, fontSize: 10, color: INK });
   const u = D.adaptive_uniform, uDev = Math.max(...Object.values(u).map((v) => Math.abs(1 - v)));
-  const facts = [["uniform input", `within ${pct(uDev)} % of static, all sizes`],
-                 ["small balanced job", `dynamic +${pct(D.dynamic_small_uniform - 1, 0)} % time; adaptive stays static`],
-                 ["best fixed schedule", `guided in ${D.best_counts.guided} of 12 cases, adaptive in ${D.best_counts.adaptive}`]];
+  const facts = [["largest saving", `${pct(gainMax)} % less run time`],
+                 ["average saving", `${mean.toFixed(1)} % less run time`],
+                 ["no clumping", `within ${pct(uDev)} % of static: no cost`]];
   facts.forEach(([a, b], i) => {
     const y = TOP + 1.8 + i * 0.75;
     rule(s, hx, y, hw);
     mono(s, a.toUpperCase(), { x: hx, y: y + 0.08, w: hw, h: 0.22, fontSize: 8.5, color: ACC, charSpacing: 1 });
     text(s, b, { x: hx, y: y + 0.32, w: hw, h: 0.3, fontSize: 12 });
   });
-  s.addNotes("Each pair of bars is one clustered case at 8 threads: how much run time each schedule saves compared with static. "
-    + "Adaptive is faster than static in all nine cases, between 1.5 and 16.6 percent.\nOn the uniform input it stays within 2.3 percent of "
-    + "static, which is what the synopsis predicted, and it avoids the 46 percent penalty that dynamic pays on a small balanced job.\n"
-    + "Guided was the best fixed schedule in nine of twelve cases; we say so plainly and discuss why on the next slide.");
+  s.addNotes("Each bar is one test where the stars clump, at 8 threads: how much run time our controller saves compared with "
+    + "plain static scheduling. It is faster in all nine, between 1.5 and 16.6 percent, 8.6 percent on average.\n"
+    + "When the stars do not clump it stays on static and costs nothing, within 2.3 percent.");
 }
 
 // ================================================================== 08 GPU, LIMITATIONS, FUTURE

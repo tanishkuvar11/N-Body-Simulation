@@ -27,7 +27,11 @@ def banner(n, title, text):
     print(text.strip("\n") + "\n")
 
 
-def run(args, ranks=1):
+class SimFailed(Exception):
+    pass
+
+
+def run(args, ranks=1, quiet_fail=False):
     """Run the simulator; returns (RESULT dict, stdout lines).  Raw output only with --details."""
     cmd = [EXE] + [str(a) for a in args]
     if ranks > 1:
@@ -40,6 +44,8 @@ def run(args, ranks=1):
             if not line.startswith("RESULT"):
                 print("     | " + line)
     if p.returncode != 0:
+        if quiet_fail:
+            raise SimFailed(p.stdout + p.stderr)
         print(p.stdout + p.stderr)
         raise SystemExit("The simulator failed. See the message above.")
     res = {}
@@ -142,8 +148,17 @@ def part4():
     banner(4, "Using the graphics card (CUDA)", """
 The graphics card has thousands of small cores, which suits the repetitive force maths.
 First it does the EXACT calculation for 65,536 stars, then it helps the shortcut method.""")
-    r, out = run(["--force", "gpu-direct", "--gpu-float", "--n", 65536, "--steps", 10, "--no-energy", "--verify",
-                  "--threads", 8])
+    try:
+        r, out = run(["--force", "gpu-direct", "--gpu-float", "--n", 65536, "--steps", 10, "--no-energy", "--verify",
+                      "--threads", 8], quiet_fail=True)
+    except SimFailed:
+        print("   The NVIDIA graphics card is not available right now (Windows only shows the integrated")
+        print("   graphics). Laptops often switch it off on battery: plug in the charger, or set the GPU mode")
+        print("   to Hybrid/Standard in the laptop's control app, then run:  python demo.py --part 4")
+        print()
+        print("   Recorded result from our benchmark (RTX 4060, 65,536 stars, exact calculation):")
+        print("   CPU with 8 threads 2,117 ms per step   |   graphics card 24 ms per step   ->  88x faster")
+        return
     gpu = next((l.split(":", 1)[1].strip() for l in out if l.startswith("GPU:")), "GPU")
     print(f"   Graphics card: {gpu}")
     print(f"   Exact calculation, 65,536 stars: {float(r['t_step']) * 1000:.0f} ms per step, "
